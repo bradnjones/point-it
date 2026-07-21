@@ -2,7 +2,7 @@
 id: STORY-001
 title: Project scaffolding & dev workflow
 epic: A Foundations
-status: not-started
+status: done
 depends_on: []
 commit_prefix: story-001
 ---

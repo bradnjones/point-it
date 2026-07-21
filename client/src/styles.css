@@ -1,0 +1,109 @@
+:root {
+  --bg: #12141a;
+  --panel: #1c1f27;
+  --text: #e8eaf0;
+  --muted: #98a0b3;
+  --accent: #5b8cff;
+  --ok: #3ecf8e;
+  --down: #e0616e;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.join {
+  max-width: 26rem;
+  margin: 4rem auto;
+  padding: 0 1.25rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0.25rem 0 2rem;
+  color: var(--muted);
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--panel);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2c3140;
+  background: #14171e;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint,
+.status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.status {
+  margin-top: 1.25rem;
+}
+
+.status-ok {
+  color: var(--ok);
+}
+
+.status-down {
+  color: var(--down);
+}

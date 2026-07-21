@@ -30,4 +30,19 @@ npm run status
 
 ## Quick start
 
-_Not yet available — delivered by STORY-001._
+```bash
+npm install
+cp .env.example .env     # optional; defaults work for local dev
+npm run dev
+```
+
+- Client: http://localhost:5173 (Vite, proxies `/api` and `/socket.io` to the server)
+- Server: http://localhost:3001
+
+Other commands:
+
+```bash
+npm test     # Vitest, both workspaces
+npm run lint # ESLint
+npm run build && npm start   # production: one process serves API + built client
+```

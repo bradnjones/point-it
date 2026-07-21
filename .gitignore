@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# Local SQLite database (STORY-002)
+data/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
