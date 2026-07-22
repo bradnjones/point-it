@@ -16,10 +16,12 @@ tracked backlog.
 To ask "where are we at?" / "what's next?", run:
 
 ```bash
-npm run status
+npm run status           # human-readable progress report
+npm run status -- --json # machine-readable
 ```
 
-(That command is delivered by STORY-003; until then, read the backlog directly.)
+It reconciles the `status:` field in each story file against the commits that
+reference it, and warns when the two drift apart.
 
 ## Tech stack
 

@@ -2,7 +2,7 @@
 id: STORY-003
 title: Progress-tracking tooling (npm run status)
 epic: A Foundations
-status: not-started
+status: done
 depends_on: [STORY-001]
 commit_prefix: story-003
 ---
