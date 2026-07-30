@@ -7,9 +7,12 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
+    "db:reset": "node scripts/reset-db.js",
+    "db:seed": "node scripts/reset-db.js --seed",
     "test": "vitest run"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"

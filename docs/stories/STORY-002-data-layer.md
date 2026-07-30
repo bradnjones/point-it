@@ -2,7 +2,7 @@
 id: STORY-002
 title: SQLite data layer & migrations
 epic: A Foundations
-status: not-started
+status: done
 depends_on: [STORY-001]
 commit_prefix: story-002
 ---
