@@ -89,21 +89,146 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.hint,
-.status {
+.hint {
   font-size: 0.8rem;
   color: var(--muted);
   margin: 0;
 }
 
-.status {
-  margin-top: 1.25rem;
-}
-
-.status-ok {
-  color: var(--ok);
-}
-
-.status-down {
+.error {
   color: var(--down);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.panel-group {
+  border: 1px solid #2c3140;
+  border-radius: 0.6rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-group legend {
+  padding: 0 0.4rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.divider {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* --- Session view --- */
+.session {
+  max-width: 40rem;
+  margin: 2.5rem auto;
+  padding: 0 1.25rem;
+}
+
+.loading {
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: 0 1.25rem;
+  color: var(--muted);
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.session-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.4rem;
+}
+
+.code-chip {
+  flex: none;
+  background: #14171e;
+  border: 1px solid #2c3140;
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.15em;
+  font-size: 0.95rem;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.link {
+  flex: none;
+  background: none;
+  color: var(--muted);
+  padding: 0.35rem 0.5rem;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.panel h2 {
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.participants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.participants li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.participants li.offline {
+  color: var(--muted);
+}
+
+.dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot.on {
+  background: var(--ok);
+}
+
+.dot.off {
+  background: #4a5163;
+}
+
+.badge {
+  font-size: 0.7rem;
+  background: rgba(91, 140, 255, 0.18);
+  color: var(--accent);
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.4rem;
+}
+
+.you {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.session .hint {
+  margin-top: 1.25rem;
 }

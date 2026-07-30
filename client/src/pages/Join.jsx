@@ -1,69 +1,120 @@
-import { useEffect, useState } from 'react';
-import { connectSocket, socket } from '../lib/socket.js';
+import { useState } from 'react';
+import { createSession, joinSession } from '../lib/api.js';
 
 /**
- * Placeholder join screen. The form is inert for now — creating and joining
- * real sessions lands in STORY-004.
+ * Join screen: create a new session (you become facilitator) or join an
+ * existing one by code. On success it hands a membership up to App.
  */
-export default function Join() {
-  const [connected, setConnected] = useState(socket.connected);
+export default function Join({ onJoined }) {
   const [displayName, setDisplayName] = useState('');
-  const [sessionCode, setSessionCode] = useState('');
+  const [sessionName, setSessionName] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    connectSocket();
+  async function handleCreate(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const { session, participant, facilitatorToken } = await createSession({
+        name: sessionName,
+        displayName,
+      });
+      onJoined({
+        code: session.code,
+        participantId: participant.id,
+        displayName: participant.displayName,
+        isFacilitator: true,
+        facilitatorToken,
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-    const onConnect = () => setConnected(true);
-    const onDisconnect = () => setConnected(false);
+  async function handleJoin(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const { session, participant } = await joinSession({ code, displayName });
+      onJoined({
+        code: session.code,
+        participantId: participant.id,
+        displayName: participant.displayName,
+        isFacilitator: false,
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-    };
-  }, []);
+  const nameValid = displayName.trim().length > 0;
 
   return (
     <main className="join">
       <h1>point-it</h1>
       <p className="tagline">Estimate stories together, without anchoring.</p>
 
-      <form className="join-form" onSubmit={(e) => e.preventDefault()}>
+      <form className="join-form">
         <label>
           Your name
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="e.g. Brad"
+            autoFocus
           />
         </label>
 
-        <label>
-          Session code
-          <input
-            value={sessionCode}
-            onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
-            placeholder="6-character code"
-            maxLength={6}
-          />
-        </label>
-
-        <div className="actions">
-          <button type="submit" disabled>
+        <fieldset className="panel-group">
+          <legend>Join a session</legend>
+          <label>
+            Session code
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="6-character code"
+              maxLength={6}
+            />
+          </label>
+          <button
+            type="submit"
+            onClick={handleJoin}
+            disabled={busy || !nameValid || code.trim().length < 6}
+          >
             Join session
           </button>
-          <button type="button" disabled>
+        </fieldset>
+
+        <div className="divider">or</div>
+
+        <fieldset className="panel-group">
+          <legend>Start a new session</legend>
+          <label>
+            Session name
+            <input
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              placeholder="e.g. Sprint 42 refinement"
+            />
+          </label>
+          <button
+            type="submit"
+            onClick={handleCreate}
+            disabled={busy || !nameValid || sessionName.trim().length === 0}
+          >
             Create session
           </button>
-        </div>
-        <p className="hint">Session create/join arrives in STORY-004.</p>
-      </form>
+        </fieldset>
 
-      <p className={connected ? 'status status-ok' : 'status status-down'}>
-        {connected ? 'Connected to server' : 'Not connected'}
-      </p>
+        {error && <p className="error">{error}</p>}
+      </form>
     </main>
   );
 }

@@ -2,7 +2,7 @@
 id: STORY-004
 title: Create & join a session (name + code, facilitator)
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-002]
 commit_prefix: story-004
 ---

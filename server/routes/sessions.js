@@ -1,0 +1,83 @@
+import { Router } from 'express';
+import {
+  createSession,
+  getSessionByCode,
+  listSessions,
+} from '../services/sessions.js';
+import { addParticipant, listParticipants } from '../services/participants.js';
+import { listStories } from '../services/stories.js';
+import { serializeParticipant, serializeSession } from '../services/serialize.js';
+
+const MAX_NAME = 80;
+
+const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/**
+ * Session REST routes. `presence` is the live connection tracker owned by the
+ * socket layer; it is injected so participant lists carry a `connected` flag.
+ */
+export function createSessionRouter(db, presence) {
+  const router = Router();
+
+  const withConnected = (participant) =>
+    serializeParticipant(participant, presence?.isConnected(participant.id) ?? false);
+
+  // Create a session; the creator becomes the facilitator.
+  router.post('/', (req, res) => {
+    const name = trimmed(req.body?.name);
+    const displayName = trimmed(req.body?.displayName);
+    const mode = req.body?.mode === 'pert' ? 'pert' : 'free_form';
+
+    if (!name) return res.status(400).json({ error: 'Session name is required' });
+    if (!displayName) return res.status(400).json({ error: 'Your name is required' });
+    if (name.length > MAX_NAME || displayName.length > MAX_NAME) {
+      return res.status(400).json({ error: 'Name is too long' });
+    }
+
+    const { session, facilitatorToken } = createSession(db, { name, mode });
+    const participant = addParticipant(db, session.id, { displayName, isFacilitator: true });
+
+    res.status(201).json({
+      session: serializeSession(session),
+      participant: withConnected(participant),
+      facilitatorToken,
+    });
+  });
+
+  // Join an existing session by code.
+  router.post('/:code/join', (req, res) => {
+    const displayName = trimmed(req.body?.displayName);
+    if (!displayName) return res.status(400).json({ error: 'Your name is required' });
+    if (displayName.length > MAX_NAME) return res.status(400).json({ error: 'Name is too long' });
+
+    const session = getSessionByCode(db, req.params.code);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.closed_at) return res.status(410).json({ error: 'This session has been closed' });
+
+    const participant = addParticipant(db, session.id, { displayName, isFacilitator: false });
+
+    res.status(201).json({
+      session: serializeSession(session),
+      participant: withConnected(participant),
+    });
+  });
+
+  // Fetch current session state — used to rehydrate after a refresh/reconnect.
+  router.get('/:code', (req, res) => {
+    const session = getSessionByCode(db, req.params.code);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    res.json({
+      session: serializeSession(session),
+      participants: listParticipants(db, session.id).map(withConnected),
+      stories: listStories(db, session.id),
+    });
+  });
+
+  // Session history list (STORY-010 builds the UI on top of this).
+  router.get('/', (_req, res) => {
+    res.json({ sessions: listSessions(db).map(serializeSession) });
+  });
+
+  return router;
+}
