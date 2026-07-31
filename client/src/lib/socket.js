@@ -22,3 +22,16 @@ export function disconnectSocket() {
     socket.disconnect();
   }
 }
+
+/**
+ * Emits an event and resolves with the server's ack. Rejects if the ack carries
+ * an `{ error }`, so callers can `try/await` a mutation like a normal request.
+ */
+export function emitWithAck(event, payload) {
+  return new Promise((resolve, reject) => {
+    socket.emit(event, payload, (ack) => {
+      if (ack?.error) reject(new Error(ack.error));
+      else resolve(ack);
+    });
+  });
+}

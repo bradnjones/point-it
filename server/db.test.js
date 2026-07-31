@@ -3,11 +3,13 @@ import { migrate, openDb } from './db.js';
 import {
   createSession,
   getSessionByCode,
+  getSessionById,
   listSessions,
+  setActiveStory,
   verifyFacilitatorToken,
 } from './services/sessions.js';
 import { addParticipant, listParticipants } from './services/participants.js';
-import { addStory, listStories, setFinalPoints } from './services/stories.js';
+import { addStory, deleteStory, listStories, reorderStories, setFinalPoints } from './services/stories.js';
 import { createRound, getCurrentRound, revealRound } from './services/rounds.js';
 import { castVote, countVotes, listVoterIds, listVotes } from './services/votes.js';
 
@@ -83,6 +85,59 @@ describe('sessions', () => {
 
     const [row] = listSessions(db);
     expect(row).toMatchObject({ story_count: 2, participant_count: 1 });
+  });
+});
+
+describe('stories (STORY-005)', () => {
+  it('assigns incrementing positions and reorders within a session', () => {
+    const db = freshDb();
+    const { session } = createSession(db, { name: 'S' });
+    const a = addStory(db, session.id, { title: 'A' });
+    const b = addStory(db, session.id, { title: 'B' });
+    const c = addStory(db, session.id, { title: 'C' });
+    expect([a.position, b.position, c.position]).toEqual([0, 1, 2]);
+
+    const reordered = reorderStories(db, session.id, [c.id, a.id, b.id]);
+    expect(reordered.map((s) => s.title)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('only reorders stories that belong to the session', () => {
+    const db = freshDb();
+    const { session: s1 } = createSession(db, { name: 'S1' });
+    const { session: s2 } = createSession(db, { name: 'S2' });
+    const mine = addStory(db, s1.id, { title: 'Mine' });
+    const other = addStory(db, s2.id, { title: 'Other' });
+
+    // A spoofed id from another session is ignored, not moved.
+    reorderStories(db, s1.id, [other.id, mine.id]);
+    expect(listStories(db, s2.id)[0].position).toBe(0);
+    expect(listStories(db, s1.id)[0].id).toBe(mine.id);
+  });
+
+  it('sets and clears the active story, rejecting foreign stories', () => {
+    const db = freshDb();
+    const { session } = createSession(db, { name: 'S' });
+    const { session: other } = createSession(db, { name: 'Other' });
+    const story = addStory(db, session.id, { title: 'T' });
+    const foreign = addStory(db, other.id, { title: 'F' });
+
+    setActiveStory(db, session.id, story.id);
+    expect(getSessionById(db, session.id).active_story_id).toBe(story.id);
+
+    expect(() => setActiveStory(db, session.id, foreign.id)).toThrow(/does not belong/i);
+
+    setActiveStory(db, session.id, null);
+    expect(getSessionById(db, session.id).active_story_id).toBeNull();
+  });
+
+  it('clears the active pointer when the active story is deleted', () => {
+    const db = freshDb();
+    const { session } = createSession(db, { name: 'S' });
+    const story = addStory(db, session.id, { title: 'T' });
+    setActiveStory(db, session.id, story.id);
+
+    deleteStory(db, story.id);
+    expect(getSessionById(db, session.id).active_story_id).toBeNull();
   });
 });
 

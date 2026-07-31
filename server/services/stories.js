@@ -38,6 +38,28 @@ export function deleteStory(db, id) {
   db.prepare('DELETE FROM stories WHERE id = ?').run(id);
 }
 
+/**
+ * Reorders a session's stories to match `orderedIds`, assigning positions
+ * 0..n-1. Only ids that actually belong to the session are moved, so a stale
+ * or spoofed list can't touch another session's rows. Runs in one transaction
+ * so the list is never observed half-reordered.
+ */
+export function reorderStories(db, sessionId, orderedIds) {
+  const owned = new Set(
+    db.prepare('SELECT id FROM stories WHERE session_id = ?').all(sessionId).map((r) => r.id)
+  );
+  const setPosition = db.prepare('UPDATE stories SET position = ? WHERE id = ? AND session_id = ?');
+
+  db.transaction(() => {
+    let position = 0;
+    for (const id of orderedIds) {
+      if (owned.has(id)) setPosition.run(position++, id, sessionId);
+    }
+  })();
+
+  return listStories(db, sessionId);
+}
+
 /** Records the agreed estimate for a story (STORY-009). */
 export function setFinalPoints(db, id, finalPoints) {
   return updateStory(db, id, { final_points: String(finalPoints) });

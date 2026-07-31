@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
-import { connectSocket, socket } from '../lib/socket.js';
+import { connectSocket, emitWithAck, socket } from '../lib/socket.js';
+import StoriesPanel from '../components/StoriesPanel.jsx';
 
 /**
- * The live session shell: session name, shareable code, and a participant list
- * that updates in real time as people connect and disconnect. Voting and
- * stories arrive in later stories.
+ * The live session shell: session name, shareable code, a participant list, and
+ * the story backlog — all updating in real time. Voting arrives in STORY-006.
  */
 export default function Session({ membership, onLeave }) {
   const [session, setSession] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [stories, setStories] = useState([]);
+  const [activeStoryId, setActiveStoryId] = useState(null);
   const [joinError, setJoinError] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const isFacilitator = Boolean(membership.facilitatorToken);
 
   useEffect(() => {
     connectSocket();
@@ -18,25 +22,47 @@ export default function Session({ membership, onLeave }) {
     const doJoin = () => {
       socket.emit(
         'session:join',
-        { code: membership.code, participantId: membership.participantId },
+        {
+          code: membership.code,
+          participantId: membership.participantId,
+          facilitatorToken: membership.facilitatorToken,
+        },
         (ack) => {
-          if (ack?.error) setJoinError(ack.error);
-          else setSession(ack.session);
+          if (ack?.error) return setJoinError(ack.error);
+          setSession(ack.session);
+          setStories(ack.stories ?? []);
+          setActiveStoryId(ack.session?.activeStoryId ?? null);
         }
       );
     };
 
     const onParticipants = ({ participants }) => setParticipants(participants);
+    const onStories = ({ stories, activeStoryId }) => {
+      setStories(stories);
+      setActiveStoryId(activeStoryId ?? null);
+    };
 
     socket.on('connect', doJoin);
     socket.on('session:participants', onParticipants);
+    socket.on('session:stories', onStories);
     if (socket.connected) doJoin();
 
     return () => {
       socket.off('connect', doJoin);
       socket.off('session:participants', onParticipants);
+      socket.off('session:stories', onStories);
     };
-  }, [membership.code, membership.participantId]);
+  }, [membership.code, membership.participantId, membership.facilitatorToken]);
+
+  // Story mutations go over the socket; the server broadcasts the new list
+  // back via `session:stories`, so these don't update local state directly.
+  const storyActions = {
+    onAdd: (title, description) => emitWithAck('story:add', { title, description }),
+    onUpdate: (storyId, fields) => emitWithAck('story:update', { storyId, ...fields }),
+    onDelete: (storyId) => emitWithAck('story:delete', { storyId }),
+    onReorder: (orderedIds) => emitWithAck('story:reorder', { orderedIds }),
+    onSetActive: (storyId) => emitWithAck('story:setActive', { storyId }),
+  };
 
   async function copyCode() {
     try {
@@ -87,7 +113,14 @@ export default function Session({ membership, onLeave }) {
         </ul>
       </section>
 
-      <p className="hint">Stories and voting arrive next (STORY-005, STORY-006).</p>
+      <StoriesPanel
+        stories={stories}
+        activeStoryId={activeStoryId}
+        isFacilitator={isFacilitator}
+        {...storyActions}
+      />
+
+      <p className="hint">Voting arrives next (STORY-006).</p>
     </main>
   );
 }

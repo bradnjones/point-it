@@ -11,6 +11,7 @@ export function serializeSession(session) {
     name: session.name,
     mode: session.mode,
     scale: session.scale,
+    activeStoryId: session.active_story_id ?? null,
     createdAt: session.created_at,
     closedAt: session.closed_at,
   };

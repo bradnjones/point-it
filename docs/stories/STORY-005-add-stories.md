@@ -2,7 +2,7 @@
 id: STORY-005
 title: Add stories to a session manually
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-004]
 commit_prefix: story-005
 ---

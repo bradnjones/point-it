@@ -89,6 +89,7 @@ describe('GET /api/sessions/:code', () => {
     expect(res.status).toBe(200);
     expect(res.body.participants).toHaveLength(2);
     expect(res.body.stories).toEqual([]);
+    expect(res.body.session.activeStoryId).toBeNull();
     expect(JSON.stringify(res.body)).not.toContain('facilitator_token');
   });
 

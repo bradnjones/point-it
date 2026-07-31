@@ -58,6 +58,22 @@ export function verifyFacilitatorToken(db, sessionId, token) {
   return crypto.timingSafeEqual(Buffer.from(session.facilitator_token), Buffer.from(hash));
 }
 
+/**
+ * Sets the story everyone is currently estimating (STORY-005). Passing null
+ * clears it. A storyId that doesn't belong to this session is rejected so a
+ * stale client can't point the room at another session's story.
+ */
+export function setActiveStory(db, sessionId, storyId) {
+  if (storyId != null) {
+    const belongs = db
+      .prepare('SELECT 1 FROM stories WHERE id = ? AND session_id = ?')
+      .get(storyId, sessionId);
+    if (!belongs) throw new Error('Story does not belong to this session');
+  }
+  db.prepare('UPDATE sessions SET active_story_id = ? WHERE id = ?').run(storyId ?? null, sessionId);
+  return getSessionById(db, sessionId);
+}
+
 export function closeSession(db, id) {
   db.prepare(
     `UPDATE sessions SET closed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
