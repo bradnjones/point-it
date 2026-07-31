@@ -2,7 +2,7 @@
 id: STORY-006
 title: Cast a private vote with optional reason
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-005]
 commit_prefix: story-006
 ---

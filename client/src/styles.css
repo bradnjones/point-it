@@ -334,3 +334,51 @@ button:disabled {
 .story-actions button:disabled {
   opacity: 0.4;
 }
+
+/* --- Vote panel --- */
+.vote-story {
+  margin: 0 0 0.9rem;
+  font-weight: 600;
+}
+
+.scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.chip {
+  flex: none;
+  min-width: 2.75rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2c3140;
+  background: #14171e;
+  color: var(--text);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.vote-story + form textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2c3140;
+  background: #14171e;
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.vote-story + form > button[type='submit'] {
+  flex: none;
+  padding: 0.55rem 1.2rem;
+}

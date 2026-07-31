@@ -8,6 +8,8 @@ import { registerSocketHandlers } from './sockets.js';
 import { createSession, getSessionById } from './services/sessions.js';
 import { addParticipant } from './services/participants.js';
 import { listStories } from './services/stories.js';
+import { getCurrentRound } from './services/rounds.js';
+import { countVotes, getVote } from './services/votes.js';
 
 let db;
 let server;
@@ -210,5 +212,113 @@ describe('story events', () => {
     await emit(facClient, 'story:reorder', { orderedIds: [c.story.id, a.story.id, b.story.id] });
     const { stories } = await reordered;
     expect(stories.map((s) => s.title)).toEqual(['C', 'A', 'B']);
+  });
+});
+
+describe('vote events', () => {
+  // A facilitator plus two voters, with a story added and set active (which
+  // opens the round they vote against).
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const alice = addParticipant(db, session.id, { displayName: 'Alice' });
+    const bob = addParticipant(db, session.id, { displayName: 'Bob' });
+
+    const facClient = connect();
+    await join(facClient, { code: session.code, participantId: fac.id, facilitatorToken });
+    const aliceClient = connect();
+    await join(aliceClient, { code: session.code, participantId: alice.id });
+    const bobClient = connect();
+    await join(bobClient, { code: session.code, participantId: bob.id });
+
+    const { story } = await emit(facClient, 'story:add', { title: 'A' });
+    await emit(facClient, 'story:setActive', { storyId: story.id });
+
+    return { session, fac, alice, bob, facClient, aliceClient, bobClient, story };
+  }
+
+  it('opens a round when a story becomes active', async () => {
+    const { story } = await setup();
+    expect(getCurrentRound(db, story.id)).toBeTruthy();
+  });
+
+  it('records a vote and acks the caller their own value and reason', async () => {
+    const { aliceClient, alice, story } = await setup();
+
+    const ack = await emit(aliceClient, 'vote:cast', { value: '5', reason: 'medium' });
+    expect(ack.vote).toMatchObject({ value: '5', reason: 'medium' });
+
+    const round = getCurrentRound(db, story.id);
+    expect(getVote(db, round.id, alice.id).reason).toBe('medium');
+  });
+
+  it('updates the existing vote on re-submit rather than duplicating', async () => {
+    const { aliceClient, alice, story } = await setup();
+
+    await emit(aliceClient, 'vote:cast', { value: '3' });
+    await emit(aliceClient, 'vote:cast', { value: '8' });
+
+    const round = getCurrentRound(db, story.id);
+    expect(getVote(db, round.id, alice.id).value).toBe('8');
+    expect(countVotes(db, round.id)).toBe(1);
+  });
+
+  it('rejects a value that is not on the session scale', async () => {
+    const { aliceClient } = await setup();
+    const ack = await emit(aliceClient, 'vote:cast', { value: '99' });
+    expect(ack.error).toMatch(/scale/i);
+  });
+
+  it('rejects voting when no story is being estimated', async () => {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const p = addParticipant(db, session.id, { displayName: 'A', isFacilitator: true });
+    const client = connect();
+    await join(client, { code: session.code, participantId: p.id, facilitatorToken });
+
+    const ack = await emit(client, 'vote:cast', { value: '5' });
+    expect(ack.error).toMatch(/no story/i);
+  });
+
+  it('never exposes another participant\'s value before reveal', async () => {
+    const { aliceClient, bobClient } = await setup();
+
+    // Record every event Bob receives after he starts listening.
+    const received = [];
+    bobClient.onAny((event, payload) => received.push({ event, payload }));
+
+    await emit(aliceClient, 'vote:cast', { value: '13', reason: 'gut feel' });
+
+    // Bob's own-vote channel shows nothing (he hasn't voted)...
+    const mine = await emit(bobClient, 'vote:mine');
+    expect(mine.vote).toBeNull();
+
+    // ...and no broadcast carried Alice's value or reason to him.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const seen = JSON.stringify(received);
+    expect(seen).not.toContain('13');
+    expect(seen).not.toContain('gut feel');
+  });
+
+  it('presents a fresh, empty vote when the active story switches', async () => {
+    const { aliceClient, facClient } = await setup();
+
+    await emit(aliceClient, 'vote:cast', { value: '5' });
+    expect((await emit(aliceClient, 'vote:mine')).vote).toMatchObject({ value: '5' });
+
+    const { story: storyB } = await emit(facClient, 'story:add', { title: 'B' });
+    await emit(facClient, 'story:setActive', { storyId: storyB.id });
+
+    expect((await emit(aliceClient, 'vote:mine')).vote).toBeNull();
+  });
+
+  it('seeds your own vote into the join ack for reconnect', async () => {
+    const { session, alice, aliceClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '8' });
+
+    // A fresh socket for the same participant (a reconnect/refresh) is handed
+    // back its own vote immediately.
+    const reconnect = connect();
+    const ack = await join(reconnect, { code: session.code, participantId: alice.id });
+    expect(ack.yourVote).toMatchObject({ value: '8' });
   });
 });

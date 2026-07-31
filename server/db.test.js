@@ -10,7 +10,7 @@ import {
 } from './services/sessions.js';
 import { addParticipant, listParticipants } from './services/participants.js';
 import { addStory, deleteStory, listStories, reorderStories, setFinalPoints } from './services/stories.js';
-import { createRound, getCurrentRound, revealRound } from './services/rounds.js';
+import { createRound, ensureRound, getCurrentRound, revealRound } from './services/rounds.js';
 import { castVote, countVotes, listVoterIds, listVotes } from './services/votes.js';
 
 const freshDb = () => openDb(':memory:');
@@ -163,6 +163,17 @@ describe('full session round-trip', () => {
 
     const finalized = setFinalPoints(db, story.id, '8');
     expect(finalized.final_points).toBe('8');
+  });
+
+  it('ensureRound opens round 1 once and then reuses it', () => {
+    const db = freshDb();
+    const { session } = createSession(db, { name: 'S' });
+    const story = addStory(db, session.id, { title: 'T' });
+
+    const first = ensureRound(db, story.id);
+    const second = ensureRound(db, story.id);
+    expect(first.id).toBe(second.id);
+    expect(first.round_number).toBe(1);
   });
 
   it('keeps prior rounds when re-voting', () => {

@@ -13,12 +13,15 @@ import {
   reorderStories,
   updateStory,
 } from './services/stories.js';
-import { serializeParticipant } from './services/serialize.js';
+import { ensureRound, getCurrentRound } from './services/rounds.js';
+import { castVote, getVote } from './services/votes.js';
+import { serializeOwnVote, serializeParticipant } from './services/serialize.js';
 
 const room = (code) => `session:${code}`;
 
 const MAX_TITLE = 200;
 const MAX_DESC = 2000;
+const MAX_REASON = 500;
 
 const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -36,6 +39,17 @@ export function registerSocketHandlers(io, db, presence) {
       serializeParticipant(p, presence.isConnected(p.id))
     );
     io.to(room(session.code)).emit('session:participants', { participants });
+  };
+
+  // A participant's own vote for the active story's current round, or null.
+  // This is the ONLY server path that returns a vote value, and it only ever
+  // returns the caller's own — see the note on serializeOwnVote.
+  const ownActiveVote = (sessionId, participantId) => {
+    const session = getSessionById(db, sessionId);
+    if (!session?.active_story_id) return null;
+    const round = getCurrentRound(db, session.active_story_id);
+    if (!round) return null;
+    return serializeOwnVote(getVote(db, round.id, participantId));
   };
 
   // Re-reads the session so `activeStoryId` reflects the latest pointer (the FK
@@ -101,6 +115,7 @@ export function registerSocketHandlers(io, db, presence) {
         },
         you: { ...serializeParticipant(participant, true), isFacilitator },
         stories: listStories(db, session.id),
+        yourVote: ownActiveVote(session.id, participant.id),
       });
 
       broadcastParticipants(session);
@@ -180,8 +195,47 @@ export function registerSocketHandlers(io, db, presence) {
       } catch {
         return ack?.({ error: 'Story not found' });
       }
+      // A story being estimated always has an open round to vote against.
+      if (storyId != null) ensureRound(db, storyId);
       ack?.({ ok: true });
       broadcastStories(socket.data.sessionId);
+    });
+
+    // Any member casts or changes their own vote for the active story's round.
+    // The round is resolved server-side from the active story, so a client can't
+    // vote against a stale or foreign round by sending its own id.
+    socket.on('vote:cast', ({ value, reason } = {}, ack) => {
+      if (!socket.data.participantId) return ack?.({ error: 'Join the session first' });
+
+      const session = getSessionById(db, socket.data.sessionId);
+      if (!session?.active_story_id) return ack?.({ error: 'No story is being estimated' });
+
+      const round = getCurrentRound(db, session.active_story_id);
+      if (!round) return ack?.({ error: 'Voting has not started' });
+      if (round.revealed_at) return ack?.({ error: 'Voting is closed for this round' });
+
+      const cleanValue = trimmed(value);
+      const scale = session.scale.split(',');
+      if (!scale.includes(cleanValue)) return ack?.({ error: 'That value is not on the scale' });
+
+      const reasonText = trimmed(reason);
+      if (reasonText.length > MAX_REASON) return ack?.({ error: 'Reason is too long' });
+
+      const vote = castVote(db, {
+        roundId: round.id,
+        participantId: socket.data.participantId,
+        value: cleanValue,
+        reason: reasonText || null,
+      });
+      // Acked only to the caller — never broadcast pre-reveal.
+      ack?.({ vote: serializeOwnVote(vote) });
+    });
+
+    // Returns the caller's own current vote (used after switching stories or
+    // reconnecting). Carries no one else's value.
+    socket.on('vote:mine', (_payload, ack) => {
+      if (!socket.data.participantId) return ack?.({ vote: null });
+      ack?.({ vote: ownActiveVote(socket.data.sessionId, socket.data.participantId) });
     });
 
     socket.on('disconnect', () => {

@@ -18,6 +18,15 @@ export function getRound(db, id) {
   return db.prepare('SELECT * FROM rounds WHERE id = ?').get(id) ?? null;
 }
 
+/**
+ * The story's current open round, creating round 1 if voting hasn't started.
+ * Called when a story becomes active (STORY-006) so there's always a round to
+ * vote against; an existing round is reused rather than reopened.
+ */
+export function ensureRound(db, storyId) {
+  return getCurrentRound(db, storyId) ?? createRound(db, storyId);
+}
+
 /** The latest round for a story, or null if voting hasn't started. */
 export function getCurrentRound(db, storyId) {
   return (

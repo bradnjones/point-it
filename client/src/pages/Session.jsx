@@ -1,20 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { connectSocket, emitWithAck, socket } from '../lib/socket.js';
 import StoriesPanel from '../components/StoriesPanel.jsx';
+import VotePanel from '../components/VotePanel.jsx';
 
 /**
- * The live session shell: session name, shareable code, a participant list, and
- * the story backlog — all updating in real time. Voting arrives in STORY-006.
+ * The live session shell: session name, shareable code, participant list, story
+ * backlog, and your private vote — all updating in real time.
  */
 export default function Session({ membership, onLeave }) {
   const [session, setSession] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [stories, setStories] = useState([]);
   const [activeStoryId, setActiveStoryId] = useState(null);
+  const [yourVote, setYourVote] = useState(null);
   const [joinError, setJoinError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const isFacilitator = Boolean(membership.facilitatorToken);
+  // Tracks the active story we last loaded a vote for, so a plain story-list
+  // change (add/edit/reorder) doesn't needlessly clear the vote in progress.
+  const activeStoryRef = useRef(null);
 
   useEffect(() => {
     connectSocket();
@@ -32,6 +37,8 @@ export default function Session({ membership, onLeave }) {
           setSession(ack.session);
           setStories(ack.stories ?? []);
           setActiveStoryId(ack.session?.activeStoryId ?? null);
+          setYourVote(ack.yourVote ?? null);
+          activeStoryRef.current = ack.session?.activeStoryId ?? null;
         }
       );
     };
@@ -39,7 +46,21 @@ export default function Session({ membership, onLeave }) {
     const onParticipants = ({ participants }) => setParticipants(participants);
     const onStories = ({ stories, activeStoryId }) => {
       setStories(stories);
-      setActiveStoryId(activeStoryId ?? null);
+      const next = activeStoryId ?? null;
+      setActiveStoryId(next);
+
+      // Only the active story changing affects your vote. Clear immediately to
+      // avoid flashing the previous story's vote, then load your vote (if any)
+      // for the new round.
+      if (next !== activeStoryRef.current) {
+        activeStoryRef.current = next;
+        setYourVote(null);
+        if (next) {
+          emitWithAck('vote:mine')
+            .then(({ vote }) => setYourVote(vote ?? null))
+            .catch(() => {});
+        }
+      }
     };
 
     socket.on('connect', doJoin);
@@ -63,6 +84,11 @@ export default function Session({ membership, onLeave }) {
     onReorder: (orderedIds) => emitWithAck('story:reorder', { orderedIds }),
     onSetActive: (storyId) => emitWithAck('story:setActive', { storyId }),
   };
+
+  async function castVote(value, reason) {
+    const { vote } = await emitWithAck('vote:cast', { value, reason });
+    setYourVote(vote);
+  }
 
   async function copyCode() {
     try {
@@ -113,14 +139,19 @@ export default function Session({ membership, onLeave }) {
         </ul>
       </section>
 
+      <VotePanel
+        activeStory={stories.find((s) => s.id === activeStoryId) ?? null}
+        scale={session?.scale ? session.scale.split(',') : []}
+        yourVote={yourVote}
+        onCast={castVote}
+      />
+
       <StoriesPanel
         stories={stories}
         activeStoryId={activeStoryId}
         isFacilitator={isFacilitator}
         {...storyActions}
       />
-
-      <p className="hint">Voting arrives next (STORY-006).</p>
     </main>
   );
 }
