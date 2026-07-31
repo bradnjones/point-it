@@ -229,6 +229,26 @@ button:disabled {
   color: var(--muted);
 }
 
+.vote-progress {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.voted {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--ok);
+}
+
+.awaiting {
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+
 .session .hint {
   margin-top: 1.25rem;
 }

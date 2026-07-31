@@ -13,6 +13,7 @@ export default function Session({ membership, onLeave }) {
   const [stories, setStories] = useState([]);
   const [activeStoryId, setActiveStoryId] = useState(null);
   const [yourVote, setYourVote] = useState(null);
+  const [voterIds, setVoterIds] = useState([]);
   const [joinError, setJoinError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -38,12 +39,14 @@ export default function Session({ membership, onLeave }) {
           setStories(ack.stories ?? []);
           setActiveStoryId(ack.session?.activeStoryId ?? null);
           setYourVote(ack.yourVote ?? null);
+          setVoterIds(ack.voterIds ?? []);
           activeStoryRef.current = ack.session?.activeStoryId ?? null;
         }
       );
     };
 
     const onParticipants = ({ participants }) => setParticipants(participants);
+    const onVoting = ({ voterIds }) => setVoterIds(voterIds ?? []);
     const onStories = ({ stories, activeStoryId }) => {
       setStories(stories);
       const next = activeStoryId ?? null;
@@ -66,12 +69,14 @@ export default function Session({ membership, onLeave }) {
     socket.on('connect', doJoin);
     socket.on('session:participants', onParticipants);
     socket.on('session:stories', onStories);
+    socket.on('session:voting', onVoting);
     if (socket.connected) doJoin();
 
     return () => {
       socket.off('connect', doJoin);
       socket.off('session:participants', onParticipants);
       socket.off('session:stories', onStories);
+      socket.off('session:voting', onVoting);
     };
   }, [membership.code, membership.participantId, membership.facilitatorToken]);
 
@@ -100,6 +105,8 @@ export default function Session({ membership, onLeave }) {
     }
   }
 
+  const voted = new Set(voterIds);
+
   if (joinError) {
     return (
       <main className="session">
@@ -126,7 +133,14 @@ export default function Session({ membership, onLeave }) {
       </header>
 
       <section className="panel">
-        <h2>Participants ({participants.length})</h2>
+        <h2>
+          Participants ({participants.length})
+          {activeStoryId && (
+            <span className="vote-progress">
+              {participants.filter((p) => voted.has(p.id)).length} of {participants.length} voted
+            </span>
+          )}
+        </h2>
         <ul className="participants">
           {participants.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
@@ -134,6 +148,12 @@ export default function Session({ membership, onLeave }) {
               {p.displayName}
               {p.isFacilitator && <span className="badge">facilitator</span>}
               {p.id === membership.participantId && <span className="you">you</span>}
+              {activeStoryId &&
+                (voted.has(p.id) ? (
+                  <span className="voted">✓ voted</span>
+                ) : (
+                  <span className="awaiting">…</span>
+                ))}
             </li>
           ))}
         </ul>

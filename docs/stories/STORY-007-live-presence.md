@@ -2,7 +2,7 @@
 id: STORY-007
 title: Live presence & "who has voted" indicators
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-006]
 commit_prefix: story-007
 ---

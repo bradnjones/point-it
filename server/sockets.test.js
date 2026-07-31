@@ -74,6 +74,17 @@ const waitForStories = (client, predicate = () => true) =>
     client.on('session:stories', handler);
   });
 
+const waitForVoting = (client, predicate = () => true) =>
+  new Promise((resolve) => {
+    const handler = (payload) => {
+      if (predicate(payload)) {
+        client.off('session:voting', handler);
+        resolve(payload);
+      }
+    };
+    client.on('session:voting', handler);
+  });
+
 describe('session:join', () => {
   it('acks with session + self, and rejects bad joins', async () => {
     const { session, facilitatorToken } = createSession(db, { name: 'S' });
@@ -320,5 +331,63 @@ describe('vote events', () => {
     const reconnect = connect();
     const ack = await join(reconnect, { code: session.code, participantId: alice.id });
     expect(ack.yourVote).toMatchObject({ value: '8' });
+  });
+});
+
+describe('voting presence (STORY-007)', () => {
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const alice = addParticipant(db, session.id, { displayName: 'Alice' });
+    const bob = addParticipant(db, session.id, { displayName: 'Bob' });
+
+    const facClient = connect();
+    await join(facClient, { code: session.code, participantId: fac.id, facilitatorToken });
+    const aliceClient = connect();
+    await join(aliceClient, { code: session.code, participantId: alice.id });
+    const bobClient = connect();
+    await join(bobClient, { code: session.code, participantId: bob.id });
+
+    const { story } = await emit(facClient, 'story:add', { title: 'A' });
+    await emit(facClient, 'story:setActive', { storyId: story.id });
+
+    return { session, fac, alice, bob, facClient, aliceClient, bobClient, story };
+  }
+
+  it('tells the room who has voted — ids only, never the value', async () => {
+    const { alice, aliceClient, bobClient } = await setup();
+
+    const seen = waitForVoting(bobClient, (p) => p.voterIds.includes(alice.id));
+    await emit(aliceClient, 'vote:cast', { value: '13', reason: 'anchoring risk' });
+
+    const payload = await seen;
+    expect(payload.voterIds).toEqual([alice.id]);
+    const asText = JSON.stringify(payload);
+    expect(asText).not.toContain('13');
+    expect(asText).not.toContain('anchoring risk');
+  });
+
+  it('resets the voter list when the active story switches', async () => {
+    const { alice, aliceClient, facClient, bobClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '5' });
+
+    const reset = waitForVoting(
+      bobClient,
+      (p) => p.voterIds.length === 0 && !p.voterIds.includes(alice.id)
+    );
+    const { story: storyB } = await emit(facClient, 'story:add', { title: 'B' });
+    await emit(facClient, 'story:setActive', { storyId: storyB.id });
+
+    const payload = await reset;
+    expect(payload.voterIds).toEqual([]);
+  });
+
+  it('seeds the current voter list into the join ack', async () => {
+    const { session, alice, aliceClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '3' });
+
+    const bob2 = addParticipant(db, session.id, { displayName: 'Bob2' });
+    const ack = await join(connect(), { code: session.code, participantId: bob2.id });
+    expect(ack.voterIds).toEqual([alice.id]);
   });
 });

@@ -14,7 +14,7 @@ import {
   updateStory,
 } from './services/stories.js';
 import { ensureRound, getCurrentRound } from './services/rounds.js';
-import { castVote, getVote } from './services/votes.js';
+import { castVote, getVote, listVoterIds } from './services/votes.js';
 import { serializeOwnVote, serializeParticipant } from './services/serialize.js';
 
 const room = (code) => `session:${code}`;
@@ -39,6 +39,31 @@ export function registerSocketHandlers(io, db, presence) {
       serializeParticipant(p, presence.isConnected(p.id))
     );
     io.to(room(session.code)).emit('session:participants', { participants });
+  };
+
+  // Ids of participants who have voted in the active round — never the values.
+  // Safe to broadcast pre-reveal; this is the whole of STORY-007's new payload.
+  const activeVoterIds = (session) => {
+    const round = session?.active_story_id
+      ? getCurrentRound(db, session.active_story_id)
+      : null;
+    return round ? listVoterIds(db, round.id) : [];
+  };
+
+  // Tells the room who has voted so far in the current round (ids only), so the
+  // facilitator can gauge progress. Reset naturally follows the active story /
+  // round changing, which re-runs this with a fresh (empty) voter list.
+  const broadcastVoting = (sessionId) => {
+    const session = getSessionById(db, sessionId);
+    if (!session) return;
+    const round = session.active_story_id
+      ? getCurrentRound(db, session.active_story_id)
+      : null;
+    io.to(room(session.code)).emit('session:voting', {
+      storyId: session.active_story_id ?? null,
+      roundId: round?.id ?? null,
+      voterIds: activeVoterIds(session),
+    });
   };
 
   // A participant's own vote for the active story's current round, or null.
@@ -116,6 +141,7 @@ export function registerSocketHandlers(io, db, presence) {
         you: { ...serializeParticipant(participant, true), isFacilitator },
         stories: listStories(db, session.id),
         yourVote: ownActiveVote(session.id, participant.id),
+        voterIds: activeVoterIds(session),
       });
 
       broadcastParticipants(session);
@@ -173,9 +199,12 @@ export function registerSocketHandlers(io, db, presence) {
         return ack?.({ error: 'Story not found' });
       }
 
+      const wasActive = getSessionById(db, socket.data.sessionId)?.active_story_id === storyId;
       deleteStory(db, storyId);
       ack?.({ ok: true });
       broadcastStories(socket.data.sessionId);
+      // Deleting the active story clears the round everyone was voting on.
+      if (wasActive) broadcastVoting(socket.data.sessionId);
     });
 
     socket.on('story:reorder', ({ orderedIds } = {}, ack) => {
@@ -199,6 +228,8 @@ export function registerSocketHandlers(io, db, presence) {
       if (storyId != null) ensureRound(db, storyId);
       ack?.({ ok: true });
       broadcastStories(socket.data.sessionId);
+      // The round changed, so the "who has voted" list resets for everyone.
+      broadcastVoting(socket.data.sessionId);
     });
 
     // Any member casts or changes their own vote for the active story's round.
@@ -227,8 +258,10 @@ export function registerSocketHandlers(io, db, presence) {
         value: cleanValue,
         reason: reasonText || null,
       });
-      // Acked only to the caller — never broadcast pre-reveal.
+      // The value is acked only to the caller and never broadcast pre-reveal;
+      // the room only learns that this participant has now voted.
       ack?.({ vote: serializeOwnVote(vote) });
+      broadcastVoting(socket.data.sessionId);
     });
 
     // Returns the caller's own current vote (used after switching stories or
