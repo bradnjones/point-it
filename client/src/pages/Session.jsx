@@ -70,6 +70,8 @@ export default function Session({ membership, onLeave }) {
       roundRef.current = next;
     };
     const onReveal = ({ reveal }) => setReveal(reveal ?? null);
+    const onClosed = ({ closedAt }) =>
+      setSession((prev) => (prev ? { ...prev, closedAt } : prev));
     const onStories = ({ stories, activeStoryId }) => {
       setStories(stories);
       const next = activeStoryId ?? null;
@@ -95,6 +97,7 @@ export default function Session({ membership, onLeave }) {
     socket.on('session:stories', onStories);
     socket.on('session:voting', onVoting);
     socket.on('session:reveal', onReveal);
+    socket.on('session:closed', onClosed);
     if (socket.connected) doJoin();
 
     return () => {
@@ -103,6 +106,7 @@ export default function Session({ membership, onLeave }) {
       socket.off('session:stories', onStories);
       socket.off('session:voting', onVoting);
       socket.off('session:reveal', onReveal);
+      socket.off('session:closed', onClosed);
     };
   }, [membership.code, membership.participantId, membership.facilitatorToken]);
 
@@ -126,6 +130,7 @@ export default function Session({ membership, onLeave }) {
   const revealVotes = () => emitWithAck('vote:reveal');
   const reVote = () => emitWithAck('vote:revote');
   const finalize = (storyId, points) => emitWithAck('story:finalize', { storyId, points });
+  const closeSession = () => emitWithAck('session:close').catch(() => {});
 
   async function copyCode() {
     try {
@@ -159,10 +164,21 @@ export default function Session({ membership, onLeave }) {
             {membership.code} {copied ? '✓' : '⧉'}
           </button>
         </div>
-        <button type="button" className="link" onClick={onLeave}>
-          Leave
-        </button>
+        <div className="session-header-actions">
+          {isFacilitator && !session?.closedAt && (
+            <button type="button" className="link" onClick={closeSession}>
+              Close session
+            </button>
+          )}
+          <button type="button" className="link" onClick={onLeave}>
+            Leave
+          </button>
+        </div>
       </header>
+
+      {session?.closedAt && (
+        <p className="closed-banner">This session has been closed.</p>
+      )}
 
       <section className="panel">
         <h2>

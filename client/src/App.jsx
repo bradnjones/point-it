@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Join from './pages/Join.jsx';
 import Session from './pages/Session.jsx';
+import History from './pages/History.jsx';
 import { getSession } from './lib/api.js';
 import { clearMembership, loadMembership, saveMembership } from './lib/storage.js';
 import { disconnectSocket } from './lib/socket.js';
@@ -8,6 +9,8 @@ import { disconnectSocket } from './lib/socket.js';
 export default function App() {
   const [membership, setMembership] = useState(null);
   const [checking, setChecking] = useState(true);
+  // Which no-membership screen to show: the join form or the history browser.
+  const [view, setView] = useState('join');
 
   // Rehydrate after a refresh: keep the stored membership only if the session
   // still exists and this participant is still a member of it.
@@ -41,9 +44,11 @@ export default function App() {
 
   if (checking) return <main className="loading">Loading…</main>;
 
-  return membership ? (
-    <Session membership={membership} onLeave={handleLeave} />
+  if (membership) return <Session membership={membership} onLeave={handleLeave} />;
+
+  return view === 'history' ? (
+    <History onBack={() => setView('join')} />
   ) : (
-    <Join onJoined={handleJoined} />
+    <Join onJoined={handleJoined} onShowHistory={() => setView('history')} />
   );
 }

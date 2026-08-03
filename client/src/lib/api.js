@@ -36,3 +36,12 @@ export function joinSession({ code, displayName }) {
 export function getSession(code) {
   return request(`/api/sessions/${encodeURIComponent(code)}`);
 }
+
+/** Past sessions, newest-first, with summary counts (STORY-010 history list). */
+export function getSessions({ limit, offset } = {}) {
+  const params = new URLSearchParams();
+  if (limit != null) params.set('limit', limit);
+  if (offset != null) params.set('offset', offset);
+  const query = params.toString();
+  return request(`/api/sessions${query ? `?${query}` : ''}`);
+}

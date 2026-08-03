@@ -567,3 +567,37 @@ describe('finalize & re-vote (STORY-009)', () => {
     expect(ack.roundId).toBe(getCurrentRound(db, story.id).id);
   });
 });
+
+describe('close session (STORY-010)', () => {
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const member = addParticipant(db, session.id, { displayName: 'Member' });
+
+    const facClient = connect();
+    await join(facClient, { code: session.code, participantId: fac.id, facilitatorToken });
+    const memberClient = connect();
+    await join(memberClient, { code: session.code, participantId: member.id });
+
+    return { session, facClient, memberClient };
+  }
+
+  it('lets the facilitator close the session and tells the room', async () => {
+    const { session, facClient, memberClient } = await setup();
+
+    const seen = new Promise((resolve) => memberClient.on('session:closed', resolve));
+    const ack = await emit(facClient, 'session:close');
+
+    expect(ack.closedAt).toBeTruthy();
+    const payload = await seen;
+    expect(payload.closedAt).toBe(ack.closedAt);
+    expect(getSessionById(db, session.id).closed_at).toBeTruthy();
+  });
+
+  it('rejects a close from a non-facilitator', async () => {
+    const { session, memberClient } = await setup();
+    const ack = await emit(memberClient, 'session:close');
+    expect(ack.error).toMatch(/facilitator/i);
+    expect(getSessionById(db, session.id).closed_at).toBeNull();
+  });
+});

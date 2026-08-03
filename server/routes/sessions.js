@@ -1,14 +1,27 @@
 import { Router } from 'express';
 import {
+  countSessions,
   createSession,
   getSessionByCode,
   listSessions,
 } from '../services/sessions.js';
 import { addParticipant, listParticipants } from '../services/participants.js';
 import { listStories } from '../services/stories.js';
-import { serializeParticipant, serializeSession } from '../services/serialize.js';
+import {
+  serializeParticipant,
+  serializeSession,
+  serializeSessionSummary,
+} from '../services/serialize.js';
 
 const MAX_NAME = 80;
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+
+// Parses a non-negative integer query param, falling back when absent/invalid.
+const intParam = (value, fallback) => {
+  const n = Number.parseInt(value, 10);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+};
 
 const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -74,9 +87,18 @@ export function createSessionRouter(db, presence) {
     });
   });
 
-  // Session history list (STORY-010 builds the UI on top of this).
-  router.get('/', (_req, res) => {
-    res.json({ sessions: listSessions(db).map(serializeSession) });
+  // Session history list, newest-first with summary counts (STORY-010). Paged
+  // via ?limit/&offset; `total` lets the client show/advance pages.
+  router.get('/', (req, res) => {
+    const limit = Math.min(intParam(req.query.limit, DEFAULT_LIMIT), MAX_LIMIT);
+    const offset = intParam(req.query.offset, 0);
+
+    res.json({
+      sessions: listSessions(db, { limit, offset }).map(serializeSessionSummary),
+      total: countSessions(db),
+      limit,
+      offset,
+    });
   });
 
   return router;

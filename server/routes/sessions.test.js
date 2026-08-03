@@ -97,3 +97,48 @@ describe('GET /api/sessions/:code', () => {
     expect((await request(app).get('/api/sessions/ZZZZZZ')).status).toBe(404);
   });
 });
+
+describe('GET /api/sessions (history list)', () => {
+  it('is empty and well-formed when there are no sessions', async () => {
+    const res = await request(app).get('/api/sessions');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ sessions: [], total: 0, offset: 0 });
+  });
+
+  it('lists sessions newest-first with summary counts and status', async () => {
+    const a = await request(app).post('/api/sessions').send({ name: 'Older', displayName: 'Host' });
+    await request(app)
+      .post(`/api/sessions/${a.body.session.code}/join`)
+      .send({ displayName: 'Guest' });
+    await request(app).post('/api/sessions').send({ name: 'Newer', displayName: 'Host' });
+
+    const res = await request(app).get('/api/sessions');
+
+    expect(res.body.total).toBe(2);
+    expect(res.body.sessions.map((s) => s.name)).toEqual(['Newer', 'Older']);
+    const older = res.body.sessions.find((s) => s.name === 'Older');
+    expect(older).toMatchObject({ participantCount: 2, storyCount: 0, status: 'active' });
+    expect(JSON.stringify(res.body)).not.toContain('facilitator_token');
+  });
+
+  it('marks a closed session and reports it in the list', async () => {
+    const created = await request(app).post('/api/sessions').send({ name: 'S', displayName: 'Host' });
+    db.prepare(`UPDATE sessions SET closed_at = 'now' WHERE code = ?`).run(created.body.session.code);
+
+    const res = await request(app).get('/api/sessions');
+    expect(res.body.sessions[0].status).toBe('closed');
+  });
+
+  it('pages via limit and offset', async () => {
+    for (const name of ['A', 'B', 'C']) {
+      await request(app).post('/api/sessions').send({ name, displayName: 'Host' });
+    }
+
+    const page1 = await request(app).get('/api/sessions?limit=2&offset=0');
+    expect(page1.body.sessions.map((s) => s.name)).toEqual(['C', 'B']);
+    expect(page1.body).toMatchObject({ total: 3, limit: 2, offset: 0 });
+
+    const page2 = await request(app).get('/api/sessions?limit=2&offset=2');
+    expect(page2.body.sessions.map((s) => s.name)).toEqual(['A']);
+  });
+});

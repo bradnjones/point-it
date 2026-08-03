@@ -5,7 +5,7 @@ import { createSession, joinSession } from '../lib/api.js';
  * Join screen: create a new session (you become facilitator) or join an
  * existing one by code. On success it hands a membership up to App.
  */
-export default function Join({ onJoined }) {
+export default function Join({ onJoined, onShowHistory }) {
   const [displayName, setDisplayName] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [code, setCode] = useState('');
@@ -115,6 +115,12 @@ export default function Join({ onJoined }) {
 
         {error && <p className="error">{error}</p>}
       </form>
+
+      {onShowHistory && (
+        <button type="button" className="link history-link" onClick={onShowHistory}>
+          View past sessions
+        </button>
+      )}
     </main>
   );
 }

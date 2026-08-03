@@ -18,6 +18,25 @@ export function serializeSession(session) {
 }
 
 /**
+ * Shapes a session row for the history list (STORY-010). Expects the row to
+ * carry `story_count` / `participant_count` from listSessions. Never includes
+ * the facilitator token.
+ */
+export function serializeSessionSummary(session) {
+  return {
+    id: session.id,
+    code: session.code,
+    name: session.name,
+    mode: session.mode,
+    createdAt: session.created_at,
+    closedAt: session.closed_at,
+    status: session.closed_at ? 'closed' : 'active',
+    storyCount: session.story_count ?? 0,
+    participantCount: session.participant_count ?? 0,
+  };
+}
+
+/**
  * Shapes a vote for its OWN author only. There is deliberately no serializer
  * that shapes someone else's vote for pre-reveal transport — the hidden-until-
  * reveal guarantee (docs/stories/STORY-006) is kept by there being no code path

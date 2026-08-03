@@ -81,15 +81,24 @@ export function closeSession(db, id) {
   return getSessionById(db, id);
 }
 
-/** Sessions newest-first, with story and participant counts for the list view. */
-export function listSessions(db) {
+/**
+ * Sessions newest-first, with story and participant counts for the history list
+ * (STORY-010). Paged via limit/offset; the caller clamps the page size.
+ */
+export function listSessions(db, { limit = 50, offset = 0 } = {}) {
   return db
     .prepare(
       `SELECT s.*,
               (SELECT COUNT(*) FROM stories WHERE session_id = s.id)      AS story_count,
               (SELECT COUNT(*) FROM participants WHERE session_id = s.id) AS participant_count
        FROM sessions s
-       ORDER BY s.created_at DESC, s.id DESC`
+       ORDER BY s.created_at DESC, s.id DESC
+       LIMIT ? OFFSET ?`
     )
-    .all();
+    .all(limit, offset);
+}
+
+/** Total number of sessions, for history paging. */
+export function countSessions(db) {
+  return db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n;
 }

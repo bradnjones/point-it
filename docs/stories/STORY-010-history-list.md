@@ -2,7 +2,7 @@
 id: STORY-010
 title: Session & estimation history (browse)
 epic: C History
-status: not-started
+status: done
 depends_on: [STORY-008]
 commit_prefix: story-010
 ---

@@ -1,4 +1,5 @@
 import {
+  closeSession,
   getSessionByCode,
   getSessionById,
   setActiveStory,
@@ -371,6 +372,21 @@ export function registerSocketHandlers(io, db, presence) {
       ack?.({ roundId: round.id });
       broadcastVoting(socket.data.sessionId);
       broadcastReveal(socket.data.sessionId);
+    });
+
+    // The facilitator closes the session (STORY-010). It stays readable in the
+    // history list but is marked closed and no longer accepts new members (the
+    // join REST route already rejects closed sessions). Connected members are
+    // told live so their UI can reflect the closed state.
+    socket.on('session:close', (_payload, ack) => {
+      if (!requireFacilitator(ack)) return;
+
+      const session = getSessionById(db, socket.data.sessionId);
+      if (!session) return ack?.({ error: 'Session not found' });
+
+      const closed = closeSession(db, session.id);
+      ack?.({ closedAt: closed.closed_at });
+      io.to(room(session.code)).emit('session:closed', { closedAt: closed.closed_at });
     });
 
     socket.on('disconnect', () => {
