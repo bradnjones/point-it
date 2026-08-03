@@ -6,7 +6,11 @@ import {
   listSessions,
   setActiveStory,
 } from '../services/sessions.js';
-import { addParticipant, listParticipants } from '../services/participants.js';
+import {
+  addParticipant,
+  generateDisplayName,
+  listParticipants,
+} from '../services/participants.js';
 import { addStory, listStories } from '../services/stories.js';
 import { ensureRound } from '../services/rounds.js';
 import {
@@ -82,15 +86,16 @@ export function createSessionRouter(db, presence) {
   // Create a session; the creator becomes the facilitator.
   router.post('/', (req, res) => {
     const name = trimmed(req.body?.name);
-    const displayName = trimmed(req.body?.displayName);
+    // The join screen no longer asks for a name; a blank one is auto-assigned.
+    const providedName = trimmed(req.body?.displayName);
     const mode = req.body?.mode === 'pert' ? 'pert' : 'free_form';
     const kind = req.body?.kind === 'quick' ? 'quick' : 'stories';
 
     if (!name) return res.status(400).json({ error: 'Session name is required' });
-    if (!displayName) return res.status(400).json({ error: 'Your name is required' });
-    if (name.length > MAX_NAME || displayName.length > MAX_NAME) {
+    if (name.length > MAX_NAME || providedName.length > MAX_NAME) {
       return res.status(400).json({ error: 'Name is too long' });
     }
+    const displayName = providedName || generateDisplayName();
 
     const scaleResult = normalizeScale(req.body?.scale);
     if (scaleResult.error) return res.status(400).json({ error: scaleResult.error });
@@ -127,9 +132,9 @@ export function createSessionRouter(db, presence) {
 
   // Join an existing session by code.
   router.post('/:code/join', (req, res) => {
-    const displayName = trimmed(req.body?.displayName);
-    if (!displayName) return res.status(400).json({ error: 'Your name is required' });
-    if (displayName.length > MAX_NAME) return res.status(400).json({ error: 'Name is too long' });
+    const providedName = trimmed(req.body?.displayName);
+    if (providedName.length > MAX_NAME) return res.status(400).json({ error: 'Name is too long' });
+    const displayName = providedName || generateDisplayName();
 
     const session = getSessionByCode(db, req.params.code);
     if (!session) return res.status(404).json({ error: 'Session not found' });

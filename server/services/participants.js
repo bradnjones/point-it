@@ -1,3 +1,24 @@
+const NAME_ADJECTIVES = [
+  'Swift', 'Bold', 'Calm', 'Bright', 'Keen', 'Brave', 'Quick', 'Wise',
+  'Merry', 'Nimble', 'Lucky', 'Clever',
+];
+const NAME_ANIMALS = [
+  'Otter', 'Fox', 'Hawk', 'Panda', 'Lynx', 'Heron', 'Bison', 'Koala',
+  'Falcon', 'Badger', 'Wren', 'Moose',
+];
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+/**
+ * A friendly, readable display name (e.g. "Swift Otter") for participants who
+ * don't supply one — the join screen no longer asks. Not guaranteed unique, but
+ * the combination space is large enough for a room and the "you" badge plus the
+ * participant id still disambiguate.
+ */
+export function generateDisplayName() {
+  return `${pick(NAME_ADJECTIVES)} ${pick(NAME_ANIMALS)}`;
+}
+
 export function addParticipant(db, sessionId, { displayName, isFacilitator = false }) {
   const info = db
     .prepare(

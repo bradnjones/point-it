@@ -26,7 +26,9 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: /point-it/i })).toBeInTheDocument()
     );
-    expect(screen.getByLabelText(/your name/i)).toBeInTheDocument();
+    // The name field was removed — a display name is auto-assigned instead.
+    expect(screen.queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/session code/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create session/i })).toBeInTheDocument();
   });
 

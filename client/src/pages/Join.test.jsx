@@ -24,15 +24,16 @@ describe('Join — create', () => {
     });
     render(<Join onJoined={vi.fn()} />);
 
-    fill(/your name/i, 'Brad');
     fill(/session name/i, 'Sprint 42');
     fireEvent.click(screen.getByRole('button', { name: /create session/i }));
 
     await waitFor(() =>
       expect(createSession).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Sprint 42', displayName: 'Brad', kind: 'stories' })
+        expect.objectContaining({ name: 'Sprint 42', kind: 'stories' })
       )
     );
+    // The name field is gone; the client sends no display name.
+    expect(createSession.mock.calls[0][0]).not.toHaveProperty('displayName');
   });
 
   it('sends the Linear 1–10 preset scale', async () => {
@@ -43,7 +44,6 @@ describe('Join — create', () => {
     });
     render(<Join onJoined={vi.fn()} />);
 
-    fill(/your name/i, 'Brad');
     fill(/session name/i, 'Hourly');
     fireEvent.change(screen.getByLabelText(/point scale/i), { target: { value: 'linear' } });
     fill(/hours per point/i, '2');
@@ -64,7 +64,6 @@ describe('Join — create', () => {
     });
     render(<Join onJoined={vi.fn()} />);
 
-    fill(/your name/i, 'Brad');
     fill(/session name/i, 'Custom');
     fireEvent.change(screen.getByLabelText(/point scale/i), { target: { value: 'custom' } });
     fill(/custom scale/i, '1, 2, 4, 8');
@@ -86,7 +85,6 @@ describe('Join — create', () => {
     const onJoined = vi.fn();
     render(<Join onJoined={onJoined} />);
 
-    fill(/your name/i, 'Brad');
     fill(/session name/i, 'Ad-hoc');
     fireEvent.click(screen.getByRole('radio', { name: /quick estimate/i }));
     fireEvent.click(screen.getByRole('button', { name: /create session/i }));

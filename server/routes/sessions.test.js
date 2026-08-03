@@ -40,9 +40,15 @@ describe('POST /api/sessions', () => {
     expect(pert.body.session.mode).toBe('pert');
   });
 
-  it('rejects a missing session or display name', async () => {
+  it('rejects a missing session name', async () => {
     expect((await request(app).post('/api/sessions').send({ displayName: 'X' })).status).toBe(400);
-    expect((await request(app).post('/api/sessions').send({ name: 'A' })).status).toBe(400);
+  });
+
+  it('auto-assigns a display name when none is given', async () => {
+    const res = await request(app).post('/api/sessions').send({ name: 'A' });
+    expect(res.status).toBe(201);
+    expect(res.body.participant.displayName).toEqual(expect.any(String));
+    expect(res.body.participant.displayName.length).toBeGreaterThan(0);
   });
 
   it('defaults to a stories session', async () => {
@@ -122,6 +128,17 @@ describe('POST /api/sessions/:code/join', () => {
     expect(res.status).toBe(201);
     expect(res.body.participant).toMatchObject({ displayName: 'Guest', isFacilitator: false });
     expect(res.body.facilitatorToken).toBeUndefined();
+  });
+
+  it('auto-assigns a display name to a joiner who gives none', async () => {
+    const created = await request(app).post('/api/sessions').send({ name: 'S', displayName: 'Host' });
+    const { code } = created.body.session;
+
+    const res = await request(app).post(`/api/sessions/${code}/join`).send({});
+
+    expect(res.status).toBe(201);
+    expect(res.body.participant.displayName).toEqual(expect.any(String));
+    expect(res.body.participant.displayName.length).toBeGreaterThan(0);
   });
 
   it('is case-insensitive on the code', async () => {

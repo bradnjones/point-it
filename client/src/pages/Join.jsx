@@ -13,7 +13,6 @@ const SCALE_PRESETS = {
  * existing one by code. On success it hands a membership up to App.
  */
 export default function Join({ onJoined, onShowHistory }) {
-  const [displayName, setDisplayName] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [kind, setKind] = useState('stories');
   const [scalePreset, setScalePreset] = useState('fibonacci');
@@ -31,7 +30,6 @@ export default function Join({ onJoined, onShowHistory }) {
       const scale = scalePreset === 'custom' ? customScale : SCALE_PRESETS[scalePreset];
       const { session, participant, facilitatorToken } = await createSession({
         name: sessionName,
-        displayName,
         kind,
         scale,
         hoursPerPoint: hoursPerPoint.trim() || undefined,
@@ -55,7 +53,7 @@ export default function Join({ onJoined, onShowHistory }) {
     setError('');
     setBusy(true);
     try {
-      const { session, participant } = await joinSession({ code, displayName });
+      const { session, participant } = await joinSession({ code });
       onJoined({
         code: session.code,
         participantId: participant.id,
@@ -69,24 +67,12 @@ export default function Join({ onJoined, onShowHistory }) {
     }
   }
 
-  const nameValid = displayName.trim().length > 0;
-
   return (
     <main className="join">
       <h1>point-it</h1>
       <p className="tagline">Estimate stories together, without anchoring.</p>
 
       <form className="join-form">
-        <label>
-          Your name
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g. Brad"
-            autoFocus
-          />
-        </label>
-
         <fieldset className="panel-group">
           <legend>Join a session</legend>
           <label>
@@ -96,12 +82,13 @@ export default function Join({ onJoined, onShowHistory }) {
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="6-character code"
               maxLength={6}
+              autoFocus
             />
           </label>
           <button
             type="submit"
             onClick={handleJoin}
-            disabled={busy || !nameValid || code.trim().length < 6}
+            disabled={busy || code.trim().length < 6}
           >
             Join session
           </button>
@@ -184,7 +171,7 @@ export default function Join({ onJoined, onShowHistory }) {
           <button
             type="submit"
             onClick={handleCreate}
-            disabled={busy || !nameValid || sessionName.trim().length === 0}
+            disabled={busy || sessionName.trim().length === 0}
           >
             Create session
           </button>
