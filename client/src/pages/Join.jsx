@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { createSession, joinSession } from '../lib/api.js';
 
+// Built-in point scales. 'custom' lets the facilitator type any comma-separated
+// scale; the server has final say on validation.
+const SCALE_PRESETS = {
+  fibonacci: '1,2,3,5,8,13,21,?',
+  linear: '1,2,3,4,5,6,7,8,9,10',
+};
+
 /**
  * Join screen: create a new session (you become facilitator) or join an
  * existing one by code. On success it hands a membership up to App.
@@ -9,6 +16,9 @@ export default function Join({ onJoined, onShowHistory }) {
   const [displayName, setDisplayName] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [kind, setKind] = useState('stories');
+  const [scalePreset, setScalePreset] = useState('fibonacci');
+  const [customScale, setCustomScale] = useState('');
+  const [hoursPerPoint, setHoursPerPoint] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -18,10 +28,13 @@ export default function Join({ onJoined, onShowHistory }) {
     setError('');
     setBusy(true);
     try {
+      const scale = scalePreset === 'custom' ? customScale : SCALE_PRESETS[scalePreset];
       const { session, participant, facilitatorToken } = await createSession({
         name: sessionName,
         displayName,
         kind,
+        scale,
+        hoursPerPoint: hoursPerPoint.trim() || undefined,
       });
       onJoined({
         code: session.code,
@@ -135,6 +148,38 @@ export default function Join({ onJoined, onShowHistory }) {
               </span>
             </label>
           </div>
+
+          <label>
+            Point scale
+            <select value={scalePreset} onChange={(e) => setScalePreset(e.target.value)}>
+              <option value="fibonacci">Fibonacci (1, 2, 3, 5, 8, 13, 21, ?)</option>
+              <option value="linear">Linear 1–10</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </label>
+
+          {scalePreset === 'custom' && (
+            <label>
+              Custom scale
+              <input
+                value={customScale}
+                onChange={(e) => setCustomScale(e.target.value)}
+                placeholder="Comma-separated, e.g. 1,2,3,4,5"
+              />
+            </label>
+          )}
+
+          <label>
+            Hours per point (optional)
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={hoursPerPoint}
+              onChange={(e) => setHoursPerPoint(e.target.value)}
+              placeholder="e.g. 2"
+            />
+          </label>
 
           <button
             type="submit"

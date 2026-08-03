@@ -183,6 +183,7 @@ export function registerSocketHandlers(io, db, presence) {
           mode: session.mode,
           kind: session.kind,
           scale: session.scale,
+          hoursPerPoint: session.hours_per_point ?? null,
           activeStoryId: session.active_story_id ?? null,
           closedAt: session.closed_at,
         },

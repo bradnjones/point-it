@@ -51,6 +51,49 @@ describe('POST /api/sessions', () => {
     expect(res.body.session.activeStoryId).toBeNull();
   });
 
+  it('defaults to the Fibonacci scale with no time mapping', async () => {
+    const res = await request(app).post('/api/sessions').send({ name: 'A', displayName: 'X' });
+    expect(res.body.session.scale).toBe('1,2,3,5,8,13,21,?');
+    expect(res.body.session.hoursPerPoint).toBeNull();
+  });
+
+  it('accepts a custom scale and hours-per-point', async () => {
+    const res = await request(app)
+      .post('/api/sessions')
+      .send({
+        name: 'Hourly',
+        displayName: 'X',
+        scale: '1,2,3,4,5,6,7,8,9,10',
+        hoursPerPoint: 2,
+      });
+    expect(res.body.session.scale).toBe('1,2,3,4,5,6,7,8,9,10');
+    expect(res.body.session.hoursPerPoint).toBe(2);
+  });
+
+  it('normalizes a scale: trims, drops blanks, de-dupes, keeps order', async () => {
+    const res = await request(app)
+      .post('/api/sessions')
+      .send({ name: 'A', displayName: 'X', scale: ' 3 , 1 ,3, , 2 ' });
+    expect(res.body.session.scale).toBe('3,1,2');
+  });
+
+  it('rejects an unusable scale or a bad hours-per-point', async () => {
+    const oneValue = await request(app)
+      .post('/api/sessions')
+      .send({ name: 'A', displayName: 'X', scale: '5' });
+    expect(oneValue.status).toBe(400);
+
+    const badHours = await request(app)
+      .post('/api/sessions')
+      .send({ name: 'A', displayName: 'X', hoursPerPoint: -2 });
+    expect(badHours.status).toBe(400);
+
+    const nonNumericHours = await request(app)
+      .post('/api/sessions')
+      .send({ name: 'A', displayName: 'X', hoursPerPoint: 'soon' });
+    expect(nonNumericHours.status).toBe(400);
+  });
+
   it('provisions a quick session with an active implicit story and open round', async () => {
     const res = await request(app)
       .post('/api/sessions')

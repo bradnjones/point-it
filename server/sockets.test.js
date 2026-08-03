@@ -568,6 +568,29 @@ describe('finalize & re-vote (STORY-009)', () => {
   });
 });
 
+describe('configurable scale (STORY-020)', () => {
+  it('carries the scale and hours-per-point in the join ack, and votes to the scale', async () => {
+    const { session } = createSession(db, {
+      name: 'Hourly',
+      scale: '1,2,3,4,5,6,7,8,9,10',
+      hoursPerPoint: 2,
+    });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const story = addStory(db, session.id, { title: 'A' });
+    setActiveStory(db, session.id, story.id);
+    ensureRound(db, story.id);
+
+    const client = connect();
+    const ack = await join(client, { code: session.code, participantId: fac.id });
+    expect(ack.session.scale).toBe('1,2,3,4,5,6,7,8,9,10');
+    expect(ack.session.hoursPerPoint).toBe(2);
+
+    // A value on the custom scale is accepted; one off it is rejected.
+    expect((await emit(client, 'vote:cast', { value: '9' })).vote).toMatchObject({ value: '9' });
+    expect((await emit(client, 'vote:cast', { value: '13' })).error).toMatch(/scale/i);
+  });
+});
+
 describe('quick sessions (STORY-019)', () => {
   // Mirrors the REST provisioning: a quick session has one implicit, always-
   // active story with an open round, so members vote the moment they join.

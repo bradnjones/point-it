@@ -14,6 +14,7 @@ export default function RevealPanel({
   onRevote,
   onFinalize,
   quick = false,
+  hoursPerPoint = null,
 }) {
   const [points, setPoints] = useState('');
   const [error, setError] = useState('');
@@ -21,6 +22,12 @@ export default function RevealPanel({
   if (!reveal) return null;
 
   const { votes, stats } = reveal;
+
+  // Time equivalent of the average estimate, shown only when the session has a
+  // rate and there are numeric votes to average. Rounded to one decimal so a
+  // 2h/point rate on an average of 5.5 reads as "11h", not "11.0000000001h".
+  const showTime = hoursPerPoint != null && stats.average != null;
+  const estHours = showTime ? Math.round(stats.average * hoursPerPoint * 10) / 10 : null;
 
   const run = async (action) => {
     setError('');
@@ -49,11 +56,19 @@ export default function RevealPanel({
           <dt>Spread</dt>
           <dd>{stats.spread == null ? '—' : `${stats.min}–${stats.max}`}</dd>
         </div>
+        {showTime && (
+          <div>
+            <dt>Est. time</dt>
+            <dd>{estHours}h</dd>
+          </div>
+        )}
         <div>
           <dt>Votes</dt>
           <dd>{stats.count}</dd>
         </div>
       </dl>
+
+      {showTime && <p className="hint rate-note">At {hoursPerPoint}h per point.</p>}
 
       <ul className="distribution">
         {stats.distribution.map(({ value, count }) => (

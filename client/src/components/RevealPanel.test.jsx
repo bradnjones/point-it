@@ -79,6 +79,17 @@ describe('RevealPanel', () => {
     expect(onRevote).toHaveBeenCalled();
   });
 
+  it('shows an estimated time only when the session has an hours-per-point rate', () => {
+    const { rerender } = render(<RevealPanel reveal={reveal} />);
+    expect(screen.queryByText(/est\. time/i)).not.toBeInTheDocument();
+
+    // average 5.5 × 2h/point = 11h
+    rerender(<RevealPanel reveal={reveal} hoursPerPoint={2} />);
+    expect(screen.getByText(/est\. time/i)).toBeInTheDocument();
+    expect(screen.getByText('11h')).toBeInTheDocument();
+    expect(screen.getByText(/2h per point/i)).toBeInTheDocument();
+  });
+
   it('hides finalize and relabels reset as "New round" in quick mode', () => {
     const onRevote = vi.fn().mockResolvedValue({});
     render(

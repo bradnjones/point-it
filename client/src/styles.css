@@ -162,6 +162,11 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.rate-note {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+}
+
 /* --- Session view --- */
 .session {
   max-width: 40rem;

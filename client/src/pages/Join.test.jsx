@@ -35,6 +35,48 @@ describe('Join — create', () => {
     );
   });
 
+  it('sends the Linear 1–10 preset scale', async () => {
+    createSession.mockResolvedValue({
+      session: { code: 'ABC123' },
+      participant: { id: 1, displayName: 'Brad' },
+      facilitatorToken: 'tok',
+    });
+    render(<Join onJoined={vi.fn()} />);
+
+    fill(/your name/i, 'Brad');
+    fill(/session name/i, 'Hourly');
+    fireEvent.change(screen.getByLabelText(/point scale/i), { target: { value: 'linear' } });
+    fill(/hours per point/i, '2');
+    fireEvent.click(screen.getByRole('button', { name: /create session/i }));
+
+    await waitFor(() =>
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ scale: '1,2,3,4,5,6,7,8,9,10', hoursPerPoint: '2' })
+      )
+    );
+  });
+
+  it('sends a typed custom scale', async () => {
+    createSession.mockResolvedValue({
+      session: { code: 'ABC123' },
+      participant: { id: 1, displayName: 'Brad' },
+      facilitatorToken: 'tok',
+    });
+    render(<Join onJoined={vi.fn()} />);
+
+    fill(/your name/i, 'Brad');
+    fill(/session name/i, 'Custom');
+    fireEvent.change(screen.getByLabelText(/point scale/i), { target: { value: 'custom' } });
+    fill(/custom scale/i, '1, 2, 4, 8');
+    fireEvent.click(screen.getByRole('button', { name: /create session/i }));
+
+    await waitFor(() =>
+      expect(createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ scale: '1, 2, 4, 8', hoursPerPoint: undefined })
+      )
+    );
+  });
+
   it('creates a quick session when that type is chosen', async () => {
     createSession.mockResolvedValue({
       session: { code: 'ABC123' },

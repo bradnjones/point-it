@@ -19,10 +19,10 @@ async function request(path, options) {
   return body;
 }
 
-export function createSession({ name, displayName, mode, kind }) {
+export function createSession({ name, displayName, mode, kind, scale, hoursPerPoint }) {
   return request('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ name, displayName, mode, kind }),
+    body: JSON.stringify({ name, displayName, mode, kind, scale, hoursPerPoint }),
   });
 }
 

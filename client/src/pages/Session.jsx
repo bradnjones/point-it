@@ -227,6 +227,7 @@ export default function Session({ membership, onLeave }) {
         onRevote={reVote}
         onFinalize={finalize}
         quick={quick}
+        hoursPerPoint={session?.hoursPerPoint ?? null}
       />
 
       {!quick && (

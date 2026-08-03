@@ -27,6 +27,48 @@ const intParam = (value, fallback) => {
 
 const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
+const DEFAULT_SCALE = '1,2,3,5,8,13,21,?';
+const MAX_SCALE_VALUES = 20;
+const MAX_SCALE_TOKEN = 8;
+const MAX_HOURS_PER_POINT = 100;
+
+/**
+ * Normalizes a requested point scale into a clean comma-separated string.
+ * Accepts a comma string or an array; trims, drops blanks, and de-dupes while
+ * preserving order. Returns { scale } on success or { error } if the result is
+ * unusable — a scale drives both voting and validation, so a malformed one must
+ * be rejected rather than silently defaulted.
+ */
+function normalizeScale(raw) {
+  if (raw == null || raw === '') return { scale: DEFAULT_SCALE };
+
+  const tokens = (Array.isArray(raw) ? raw : String(raw).split(','))
+    .map((t) => String(t).trim())
+    .filter((t) => t.length > 0);
+
+  const unique = [...new Set(tokens)];
+  if (unique.length < 2) return { error: 'A scale needs at least two distinct values' };
+  if (unique.length > MAX_SCALE_VALUES) return { error: 'That scale has too many values' };
+  if (unique.some((t) => t.length > MAX_SCALE_TOKEN)) {
+    return { error: 'A scale value is too long' };
+  }
+  return { scale: unique.join(',') };
+}
+
+/**
+ * Parses an optional hours-per-point rate. Absent/blank means "no time
+ * mapping" (null). A present value must be a positive, finite number within a
+ * sane bound; anything else is rejected so bad input can't be stored.
+ */
+function normalizeHoursPerPoint(raw) {
+  if (raw == null || raw === '') return { hoursPerPoint: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_HOURS_PER_POINT) {
+    return { error: 'Hours per point must be a positive number' };
+  }
+  return { hoursPerPoint: n };
+}
+
 /**
  * Session REST routes. `presence` is the live connection tracker owned by the
  * socket layer; it is injected so participant lists carry a `connected` flag.
@@ -50,7 +92,18 @@ export function createSessionRouter(db, presence) {
       return res.status(400).json({ error: 'Name is too long' });
     }
 
-    let { session, facilitatorToken } = createSession(db, { name, mode, kind });
+    const scaleResult = normalizeScale(req.body?.scale);
+    if (scaleResult.error) return res.status(400).json({ error: scaleResult.error });
+    const hoursResult = normalizeHoursPerPoint(req.body?.hoursPerPoint);
+    if (hoursResult.error) return res.status(400).json({ error: hoursResult.error });
+
+    let { session, facilitatorToken } = createSession(db, {
+      name,
+      mode,
+      kind,
+      scale: scaleResult.scale,
+      hoursPerPoint: hoursResult.hoursPerPoint,
+    });
     const participant = addParticipant(db, session.id, { displayName, isFacilitator: true });
 
     // A quick session has no managed backlog: it estimates repeated rounds
