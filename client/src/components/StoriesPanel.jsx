@@ -96,6 +96,9 @@ export default function StoriesPanel({
                     )}
                   </div>
                   {story.id === activeStoryId && <span className="badge">estimating</span>}
+                  {story.final_points != null && (
+                    <span className="badge final">{story.final_points} pts</span>
+                  )}
                 </div>
 
                 {isFacilitator && (

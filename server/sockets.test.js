@@ -7,7 +7,7 @@ import { createPresence } from './services/presence.js';
 import { registerSocketHandlers } from './sockets.js';
 import { createSession, getSessionById } from './services/sessions.js';
 import { addParticipant } from './services/participants.js';
-import { listStories } from './services/stories.js';
+import { getStory, listStories } from './services/stories.js';
 import { getCurrentRound, isRevealed } from './services/rounds.js';
 import { countVotes, getVote } from './services/votes.js';
 
@@ -482,5 +482,88 @@ describe('reveal (STORY-008)', () => {
     const { story: storyB } = await emit(facClient, 'story:add', { title: 'B' });
     await emit(facClient, 'story:setActive', { storyId: storyB.id });
     await cleared;
+  });
+});
+
+describe('finalize & re-vote (STORY-009)', () => {
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const alice = addParticipant(db, session.id, { displayName: 'Alice' });
+    const bob = addParticipant(db, session.id, { displayName: 'Bob' });
+
+    const facClient = connect();
+    await join(facClient, { code: session.code, participantId: fac.id, facilitatorToken });
+    const aliceClient = connect();
+    await join(aliceClient, { code: session.code, participantId: alice.id });
+    const bobClient = connect();
+    await join(bobClient, { code: session.code, participantId: bob.id });
+
+    const { story } = await emit(facClient, 'story:add', { title: 'A' });
+    await emit(facClient, 'story:setActive', { storyId: story.id });
+
+    return { session, fac, alice, bob, facClient, aliceClient, bobClient, story };
+  }
+
+  it('finalizes a story, recording final points and broadcasting to the room', async () => {
+    const { facClient, bobClient, story } = await setup();
+
+    const seen = waitForStories(bobClient, (p) =>
+      p.stories.some((s) => s.id === story.id && s.final_points === '5')
+    );
+    const ack = await emit(facClient, 'story:finalize', { storyId: story.id, points: '5' });
+
+    expect(ack.story).toMatchObject({ id: story.id, final_points: '5' });
+    await seen;
+    expect(getStory(db, story.id).final_points).toBe('5');
+  });
+
+  it('rejects finalize from a non-facilitator and requires a value', async () => {
+    const { aliceClient, facClient, story } = await setup();
+
+    const denied = await emit(aliceClient, 'story:finalize', { storyId: story.id, points: '5' });
+    expect(denied.error).toMatch(/facilitator/i);
+
+    const empty = await emit(facClient, 'story:finalize', { storyId: story.id, points: '   ' });
+    expect(empty.error).toMatch(/required/i);
+    expect(getStory(db, story.id).final_points).toBeNull();
+  });
+
+  it('re-votes into round N+1 while retaining the prior round and its votes', async () => {
+    const { alice, aliceClient, bobClient, facClient, story } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '3' });
+    const round1 = getCurrentRound(db, story.id);
+    await emit(facClient, 'vote:reveal');
+
+    const reset = waitForVoting(bobClient, (p) => p.voterIds.length === 0 && p.roundId !== round1.id);
+    const revealCleared = waitForReveal(bobClient, (p) => p.reveal === null);
+    const ack = await emit(facClient, 'vote:revote');
+
+    const payload = await reset;
+    await revealCleared;
+
+    const round2 = getCurrentRound(db, story.id);
+    expect(ack.roundId).toBe(round2.id);
+    expect(round2.round_number).toBe(round1.round_number + 1);
+    expect(payload.roundId).toBe(round2.id);
+
+    // Alice's round-1 vote is untouched (history), and round 2 starts empty.
+    expect(getVote(db, round1.id, alice.id).value).toBe('3');
+    expect(countVotes(db, round2.id)).toBe(0);
+  });
+
+  it('rejects re-vote from a non-facilitator', async () => {
+    const { aliceClient, story } = await setup();
+    const before = getCurrentRound(db, story.id);
+    const ack = await emit(aliceClient, 'vote:revote');
+    expect(ack.error).toMatch(/facilitator/i);
+    expect(getCurrentRound(db, story.id).id).toBe(before.id);
+  });
+
+  it('exposes the active round id in the join ack', async () => {
+    const { session, story } = await setup();
+    const late = addParticipant(db, session.id, { displayName: 'Late' });
+    const ack = await join(connect(), { code: session.code, participantId: late.id });
+    expect(ack.roundId).toBe(getCurrentRound(db, story.id).id);
   });
 });

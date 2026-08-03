@@ -75,4 +75,11 @@ describe('StoriesPanel', () => {
 
     expect(onDelete).toHaveBeenCalledWith(1);
   });
+
+  it('shows the finalized points on an estimated story', () => {
+    renderPanel({
+      stories: [{ id: 1, title: 'First', description: null, final_points: '5' }],
+    });
+    expect(screen.getByText('5 pts')).toBeInTheDocument();
+  });
 });

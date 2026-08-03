@@ -23,6 +23,9 @@ export default function Session({ membership, onLeave }) {
   // Tracks the active story we last loaded a vote for, so a plain story-list
   // change (add/edit/reorder) doesn't needlessly clear the vote in progress.
   const activeStoryRef = useRef(null);
+  // Tracks the current round so a re-vote (same story, new round) resets the
+  // vote and reveal even though the active story hasn't changed.
+  const roundRef = useRef(null);
 
   useEffect(() => {
     connectSocket();
@@ -44,12 +47,28 @@ export default function Session({ membership, onLeave }) {
           setVoterIds(ack.voterIds ?? []);
           setReveal(ack.reveal ?? null);
           activeStoryRef.current = ack.session?.activeStoryId ?? null;
+          roundRef.current = ack.roundId ?? null;
         }
       );
     };
 
     const onParticipants = ({ participants }) => setParticipants(participants);
-    const onVoting = ({ voterIds }) => setVoterIds(voterIds ?? []);
+    const onVoting = ({ roundId, voterIds }) => {
+      setVoterIds(voterIds ?? []);
+      const next = roundId ?? null;
+      // A re-vote keeps the active story but opens a new round: clear the vote
+      // and reveal, then reload your (empty) vote for the new round. Guarded on
+      // a previously-known non-null round so the first observation after joining
+      // or activating a story doesn't wipe a freshly-seeded vote.
+      if (next !== roundRef.current && roundRef.current !== null && next !== null) {
+        setYourVote(null);
+        setReveal(null);
+        emitWithAck('vote:mine')
+          .then(({ vote }) => setYourVote(vote ?? null))
+          .catch(() => {});
+      }
+      roundRef.current = next;
+    };
     const onReveal = ({ reveal }) => setReveal(reveal ?? null);
     const onStories = ({ stories, activeStoryId }) => {
       setStories(stories);
@@ -102,9 +121,11 @@ export default function Session({ membership, onLeave }) {
     setYourVote(vote);
   }
 
-  // The broadcast sets reveal state for everyone (including the facilitator), so
-  // this just fires the action; the ack is ignored in favour of the broadcast.
+  // These broadcast their result to everyone (including the facilitator), so
+  // they just fire the action; the ack is ignored in favour of the broadcast.
   const revealVotes = () => emitWithAck('vote:reveal');
+  const reVote = () => emitWithAck('vote:revote');
+  const finalize = (storyId, points) => emitWithAck('story:finalize', { storyId, points });
 
   async function copyCode() {
     try {
@@ -180,7 +201,12 @@ export default function Session({ membership, onLeave }) {
         onReveal={revealVotes}
       />
 
-      <RevealPanel reveal={reveal} />
+      <RevealPanel
+        reveal={reveal}
+        isFacilitator={isFacilitator}
+        onRevote={reVote}
+        onFinalize={finalize}
+      />
 
       <StoriesPanel
         stories={stories}

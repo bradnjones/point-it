@@ -11,9 +11,10 @@ import {
   getStory,
   listStories,
   reorderStories,
+  setFinalPoints,
   updateStory,
 } from './services/stories.js';
-import { ensureRound, getCurrentRound, revealRound } from './services/rounds.js';
+import { createRound, ensureRound, getCurrentRound, revealRound } from './services/rounds.js';
 import { castVote, getVote, listVoterIds, listVotes } from './services/votes.js';
 import {
   serializeOwnVote,
@@ -27,6 +28,7 @@ const room = (code) => `session:${code}`;
 const MAX_TITLE = 200;
 const MAX_DESC = 2000;
 const MAX_REASON = 500;
+const MAX_POINTS = 20;
 
 const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -180,6 +182,9 @@ export function registerSocketHandlers(io, db, presence) {
         stories: listStories(db, session.id),
         yourVote: ownActiveVote(session.id, participant.id),
         voterIds: activeVoterIds(session),
+        roundId: session.active_story_id
+          ? (getCurrentRound(db, session.active_story_id)?.id ?? null)
+          : null,
         reveal: revealPayload(session),
       });
 
@@ -331,6 +336,41 @@ export function registerSocketHandlers(io, db, presence) {
       const reveal = revealPayload(getSessionById(db, session.id));
       ack?.({ reveal });
       io.to(room(session.code)).emit('session:reveal', { reveal });
+    });
+
+    // The facilitator records the agreed estimate on a story. Free choice (not
+    // constrained to the scale) since it's set after discussion. The value lands
+    // in the story list, so everyone sees the finalized number.
+    socket.on('story:finalize', ({ storyId, points } = {}, ack) => {
+      if (!requireFacilitator(ack)) return;
+
+      const story = getStory(db, storyId);
+      if (!story || story.session_id !== socket.data.sessionId) {
+        return ack?.({ error: 'Story not found' });
+      }
+
+      const cleanPoints = trimmed(points);
+      if (!cleanPoints) return ack?.({ error: 'Final points are required' });
+      if (cleanPoints.length > MAX_POINTS) return ack?.({ error: 'Final points value is too long' });
+
+      const updated = setFinalPoints(db, storyId, cleanPoints);
+      ack?.({ story: updated });
+      broadcastStories(socket.data.sessionId);
+    });
+
+    // The facilitator opens a fresh round for the active story (a re-vote after
+    // discussion). Prior rounds — and their votes — are retained for history;
+    // presence, votes and any reveal reset because the current round changes.
+    socket.on('vote:revote', (_payload, ack) => {
+      if (!requireFacilitator(ack)) return;
+
+      const session = getSessionById(db, socket.data.sessionId);
+      if (!session?.active_story_id) return ack?.({ error: 'No story is being estimated' });
+
+      const round = createRound(db, session.active_story_id);
+      ack?.({ roundId: round.id });
+      broadcastVoting(socket.data.sessionId);
+      broadcastReveal(socket.data.sessionId);
     });
 
     socket.on('disconnect', () => {

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import RevealPanel from './RevealPanel.jsx';
 
 const reveal = {
-  storyId: 1,
+  storyId: 7,
   roundId: 1,
   votes: [
     { participantId: 1, displayName: 'Alice', value: '3', reason: 'small' },
@@ -52,5 +52,30 @@ describe('RevealPanel', () => {
     };
     render(<RevealPanel reveal={agreed} />);
     expect(screen.getByText(/consensus/i)).toBeInTheDocument();
+  });
+
+  it('hides facilitator actions from non-facilitators', () => {
+    render(<RevealPanel reveal={reveal} isFacilitator={false} />);
+    expect(screen.queryByRole('button', { name: /re-vote/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/final points/i)).not.toBeInTheDocument();
+  });
+
+  it('lets the facilitator finalize with the round’s story id', () => {
+    const onFinalize = vi.fn().mockResolvedValue({});
+    render(<RevealPanel reveal={reveal} isFacilitator onFinalize={onFinalize} onRevote={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/final points/i), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /finalize/i }));
+
+    expect(onFinalize).toHaveBeenCalledWith(7, '5');
+  });
+
+  it('lets the facilitator trigger a re-vote', () => {
+    const onRevote = vi.fn().mockResolvedValue({});
+    render(<RevealPanel reveal={reveal} isFacilitator onRevote={onRevote} onFinalize={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /re-vote/i }));
+
+    expect(onRevote).toHaveBeenCalled();
   });
 });

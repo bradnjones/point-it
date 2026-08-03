@@ -2,7 +2,7 @@
 id: STORY-009
 title: Finalize points & re-vote rounds
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-008]
 commit_prefix: story-009
 ---

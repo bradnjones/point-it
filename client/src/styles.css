@@ -499,3 +499,51 @@ button:disabled {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.badge.final {
+  margin-left: 0.5rem;
+  background: rgba(62, 207, 142, 0.18);
+  color: var(--ok);
+}
+
+.reveal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #2c3140;
+}
+
+.finalize-form {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.finalize-form input {
+  flex: 1;
+  min-width: 6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #2c3140;
+  background: #14171e;
+  color: var(--text);
+  font: inherit;
+}
+
+.revote-btn {
+  padding: 0.55rem 1.2rem;
+  border: 1px solid #2c3140;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.revote-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

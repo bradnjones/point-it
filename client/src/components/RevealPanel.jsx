@@ -1,12 +1,34 @@
+import { useState } from 'react';
+
 /**
  * The revealed round: every participant's value and reason at once, plus the
  * round stats. Rendered only once the facilitator reveals — before that the
  * server never sends anyone else's value (docs/stories/STORY-006).
+ *
+ * Post-reveal is also where the facilitator drives what happens next
+ * (STORY-009): agree a final number, or re-vote for another round.
  */
-export default function RevealPanel({ reveal }) {
+export default function RevealPanel({ reveal, isFacilitator = false, onRevote, onFinalize }) {
+  const [points, setPoints] = useState('');
+  const [error, setError] = useState('');
+
   if (!reveal) return null;
 
   const { votes, stats } = reveal;
+
+  const run = async (action) => {
+    setError('');
+    try {
+      await action();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  async function finalize(e) {
+    e.preventDefault();
+    await run(() => onFinalize(reveal.storyId, points.trim()));
+  }
 
   return (
     <section className="panel reveal">
@@ -45,6 +67,27 @@ export default function RevealPanel({ reveal }) {
           </li>
         ))}
       </ul>
+
+      {isFacilitator && (
+        <div className="reveal-actions">
+          <form className="finalize-form" onSubmit={finalize}>
+            <input
+              aria-label="Final points"
+              value={points}
+              onChange={(e) => setPoints(e.target.value)}
+              placeholder="Final points"
+            />
+            <button type="submit" disabled={points.trim().length === 0}>
+              Finalize
+            </button>
+          </form>
+          <button type="button" className="revote-btn" onClick={() => run(onRevote)}>
+            Re-vote
+          </button>
+        </div>
+      )}
+
+      {error && <p className="error">{error}</p>}
     </section>
   );
 }
