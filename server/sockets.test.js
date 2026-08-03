@@ -8,7 +8,7 @@ import { registerSocketHandlers } from './sockets.js';
 import { createSession, getSessionById } from './services/sessions.js';
 import { addParticipant } from './services/participants.js';
 import { listStories } from './services/stories.js';
-import { getCurrentRound } from './services/rounds.js';
+import { getCurrentRound, isRevealed } from './services/rounds.js';
 import { countVotes, getVote } from './services/votes.js';
 
 let db;
@@ -83,6 +83,17 @@ const waitForVoting = (client, predicate = () => true) =>
       }
     };
     client.on('session:voting', handler);
+  });
+
+const waitForReveal = (client, predicate = () => true) =>
+  new Promise((resolve) => {
+    const handler = (payload) => {
+      if (predicate(payload)) {
+        client.off('session:reveal', handler);
+        resolve(payload);
+      }
+    };
+    client.on('session:reveal', handler);
   });
 
 describe('session:join', () => {
@@ -389,5 +400,87 @@ describe('voting presence (STORY-007)', () => {
     const bob2 = addParticipant(db, session.id, { displayName: 'Bob2' });
     const ack = await join(connect(), { code: session.code, participantId: bob2.id });
     expect(ack.voterIds).toEqual([alice.id]);
+  });
+});
+
+describe('reveal (STORY-008)', () => {
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'S' });
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const alice = addParticipant(db, session.id, { displayName: 'Alice' });
+    const bob = addParticipant(db, session.id, { displayName: 'Bob' });
+
+    const facClient = connect();
+    await join(facClient, { code: session.code, participantId: fac.id, facilitatorToken });
+    const aliceClient = connect();
+    await join(aliceClient, { code: session.code, participantId: alice.id });
+    const bobClient = connect();
+    await join(bobClient, { code: session.code, participantId: bob.id });
+
+    const { story } = await emit(facClient, 'story:add', { title: 'A' });
+    await emit(facClient, 'story:setActive', { storyId: story.id });
+
+    return { session, fac, alice, bob, facClient, aliceClient, bobClient, story };
+  }
+
+  it('reveals every vote and reason to the whole room with stats', async () => {
+    const { alice, bob, facClient, aliceClient, bobClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '3', reason: 'small' });
+    await emit(bobClient, 'vote:cast', { value: '8', reason: 'risky' });
+
+    const seen = waitForReveal(bobClient, (p) => p.reveal !== null);
+    const ack = await emit(facClient, 'vote:reveal');
+
+    const payload = await seen;
+    expect(ack.reveal.stats).toMatchObject({ min: 3, max: 8, spread: 5, consensus: false });
+    expect(payload.reveal.votes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ participantId: alice.id, value: '3', reason: 'small' }),
+        expect.objectContaining({ participantId: bob.id, value: '8', reason: 'risky' }),
+      ])
+    );
+    expect(payload.reveal.stats.average).toBe(5.5);
+  });
+
+  it('rejects a reveal from a non-facilitator', async () => {
+    const { aliceClient, story } = await setup();
+    const ack = await emit(aliceClient, 'vote:reveal');
+    expect(ack.error).toMatch(/facilitator/i);
+    expect(isRevealed(db, getCurrentRound(db, story.id).id)).toBe(false);
+  });
+
+  it('locks voting once revealed', async () => {
+    const { facClient, aliceClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '5' });
+    await emit(facClient, 'vote:reveal');
+
+    const ack = await emit(aliceClient, 'vote:cast', { value: '8' });
+    expect(ack.error).toMatch(/closed/i);
+  });
+
+  it('seeds the reveal into a late joiner’s ack, and is null before reveal', async () => {
+    const { session, aliceClient, facClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '5', reason: 'seen' });
+
+    const early = addParticipant(db, session.id, { displayName: 'Early' });
+    const earlyAck = await join(connect(), { code: session.code, participantId: early.id });
+    expect(earlyAck.reveal).toBeNull();
+
+    await emit(facClient, 'vote:reveal');
+
+    const late = addParticipant(db, session.id, { displayName: 'Late' });
+    const lateAck = await join(connect(), { code: session.code, participantId: late.id });
+    expect(lateAck.reveal.votes.some((v) => v.value === '5' && v.reason === 'seen')).toBe(true);
+  });
+
+  it('clears the reveal when the active story switches', async () => {
+    const { facClient, aliceClient, bobClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '5' });
+    await emit(facClient, 'vote:reveal');
+
+    const cleared = waitForReveal(bobClient, (p) => p.reveal === null);
+    const { story: storyB } = await emit(facClient, 'story:add', { title: 'B' });
+    await emit(facClient, 'story:setActive', { storyId: storyB.id });
+    await cleared;
   });
 });

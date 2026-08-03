@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { connectSocket, emitWithAck, socket } from '../lib/socket.js';
 import StoriesPanel from '../components/StoriesPanel.jsx';
 import VotePanel from '../components/VotePanel.jsx';
+import RevealPanel from '../components/RevealPanel.jsx';
 
 /**
  * The live session shell: session name, shareable code, participant list, story
@@ -14,6 +15,7 @@ export default function Session({ membership, onLeave }) {
   const [activeStoryId, setActiveStoryId] = useState(null);
   const [yourVote, setYourVote] = useState(null);
   const [voterIds, setVoterIds] = useState([]);
+  const [reveal, setReveal] = useState(null);
   const [joinError, setJoinError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -40,6 +42,7 @@ export default function Session({ membership, onLeave }) {
           setActiveStoryId(ack.session?.activeStoryId ?? null);
           setYourVote(ack.yourVote ?? null);
           setVoterIds(ack.voterIds ?? []);
+          setReveal(ack.reveal ?? null);
           activeStoryRef.current = ack.session?.activeStoryId ?? null;
         }
       );
@@ -47,6 +50,7 @@ export default function Session({ membership, onLeave }) {
 
     const onParticipants = ({ participants }) => setParticipants(participants);
     const onVoting = ({ voterIds }) => setVoterIds(voterIds ?? []);
+    const onReveal = ({ reveal }) => setReveal(reveal ?? null);
     const onStories = ({ stories, activeStoryId }) => {
       setStories(stories);
       const next = activeStoryId ?? null;
@@ -58,6 +62,7 @@ export default function Session({ membership, onLeave }) {
       if (next !== activeStoryRef.current) {
         activeStoryRef.current = next;
         setYourVote(null);
+        setReveal(null);
         if (next) {
           emitWithAck('vote:mine')
             .then(({ vote }) => setYourVote(vote ?? null))
@@ -70,6 +75,7 @@ export default function Session({ membership, onLeave }) {
     socket.on('session:participants', onParticipants);
     socket.on('session:stories', onStories);
     socket.on('session:voting', onVoting);
+    socket.on('session:reveal', onReveal);
     if (socket.connected) doJoin();
 
     return () => {
@@ -77,6 +83,7 @@ export default function Session({ membership, onLeave }) {
       socket.off('session:participants', onParticipants);
       socket.off('session:stories', onStories);
       socket.off('session:voting', onVoting);
+      socket.off('session:reveal', onReveal);
     };
   }, [membership.code, membership.participantId, membership.facilitatorToken]);
 
@@ -94,6 +101,10 @@ export default function Session({ membership, onLeave }) {
     const { vote } = await emitWithAck('vote:cast', { value, reason });
     setYourVote(vote);
   }
+
+  // The broadcast sets reveal state for everyone (including the facilitator), so
+  // this just fires the action; the ack is ignored in favour of the broadcast.
+  const revealVotes = () => emitWithAck('vote:reveal');
 
   async function copyCode() {
     try {
@@ -164,7 +175,12 @@ export default function Session({ membership, onLeave }) {
         scale={session?.scale ? session.scale.split(',') : []}
         yourVote={yourVote}
         onCast={castVote}
+        isFacilitator={isFacilitator}
+        revealed={Boolean(reveal)}
+        onReveal={revealVotes}
       />
+
+      <RevealPanel reveal={reveal} />
 
       <StoriesPanel
         stories={stories}

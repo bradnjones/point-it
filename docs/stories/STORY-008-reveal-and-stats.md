@@ -2,7 +2,7 @@
 id: STORY-008
 title: Facilitator reveal + vote stats
 epic: B Core
-status: not-started
+status: done
 depends_on: [STORY-006]
 commit_prefix: story-008
 ---

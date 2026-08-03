@@ -39,6 +39,29 @@ export function serializeOwnVote(vote) {
   };
 }
 
+/**
+ * Shapes a vote for the whole room. POST-REVEAL ONLY: this carries the value,
+ * reason and author identity, so it must only be sent once the round's
+ * `revealed_at` is set (docs/stories/STORY-008). The pre-reveal guarantee still
+ * holds because the sole caller is the reveal path.
+ */
+export function serializeRevealedVote(vote, displayName) {
+  return {
+    participantId: vote.participant_id,
+    displayName,
+    value: vote.value,
+    pert:
+      vote.pert_optimistic == null
+        ? null
+        : {
+            optimistic: vote.pert_optimistic,
+            likely: vote.pert_likely,
+            pessimistic: vote.pert_pessimistic,
+          },
+    reason: vote.reason,
+  };
+}
+
 export function serializeParticipant(participant, connected = false) {
   return {
     id: participant.id,

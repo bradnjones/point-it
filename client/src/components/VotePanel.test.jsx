@@ -12,6 +12,9 @@ function renderPanel(props = {}) {
       scale={props.scale ?? scale}
       yourVote={props.yourVote ?? null}
       onCast={onCast}
+      isFacilitator={props.isFacilitator ?? false}
+      revealed={props.revealed ?? false}
+      onReveal={props.onReveal ?? vi.fn().mockResolvedValue({})}
     />
   );
   return onCast;
@@ -45,5 +48,26 @@ describe('VotePanel', () => {
     expect(screen.getByRole('button', { name: '8' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText(/reason/i)).toHaveValue('gut feel');
     expect(screen.getByRole('button', { name: /update vote/i })).toBeInTheDocument();
+  });
+
+  it('shows a reveal button only to the facilitator', () => {
+    renderPanel();
+    expect(screen.queryByRole('button', { name: /reveal votes/i })).not.toBeInTheDocument();
+
+    renderPanel({ isFacilitator: true });
+    expect(screen.getByRole('button', { name: /reveal votes/i })).toBeInTheDocument();
+  });
+
+  it('fires onReveal when the facilitator reveals', () => {
+    const onReveal = vi.fn().mockResolvedValue({});
+    renderPanel({ isFacilitator: true, onReveal });
+    fireEvent.click(screen.getByRole('button', { name: /reveal votes/i }));
+    expect(onReveal).toHaveBeenCalled();
+  });
+
+  it('locks the form once votes are revealed', () => {
+    renderPanel({ revealed: true, yourVote: { value: '5' } });
+    expect(screen.getByText(/votes are revealed/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '5' })).not.toBeInTheDocument();
   });
 });

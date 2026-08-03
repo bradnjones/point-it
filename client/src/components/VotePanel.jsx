@@ -6,7 +6,15 @@ import { useEffect, useState } from 'react';
  * before reveal (docs/stories/STORY-006). Selecting a scale value and
  * submitting calls onCast; the parent seeds `yourVote` from the server.
  */
-export default function VotePanel({ activeStory, scale, yourVote, onCast }) {
+export default function VotePanel({
+  activeStory,
+  scale,
+  yourVote,
+  onCast,
+  isFacilitator = false,
+  revealed = false,
+  onReveal,
+}) {
   const [value, setValue] = useState(yourVote?.value ?? '');
   const [reason, setReason] = useState(yourVote?.reason ?? '');
   const [error, setError] = useState('');
@@ -36,6 +44,25 @@ export default function VotePanel({ activeStory, scale, yourVote, onCast }) {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function reveal() {
+    setError('');
+    try {
+      await onReveal();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  if (revealed) {
+    return (
+      <section className="panel">
+        <h2>Your vote</h2>
+        <p className="vote-story">{activeStory.title}</p>
+        <p className="hint">Votes are revealed — see the results below.</p>
+      </section>
+    );
   }
 
   return (
@@ -74,6 +101,13 @@ export default function VotePanel({ activeStory, scale, yourVote, onCast }) {
       {yourVote && (
         <p className="hint">Your estimate is in — you can change it until the reveal.</p>
       )}
+
+      {isFacilitator && (
+        <button type="button" className="reveal-btn" onClick={reveal}>
+          Reveal votes
+        </button>
+      )}
+
       {error && <p className="error">{error}</p>}
     </section>
   );

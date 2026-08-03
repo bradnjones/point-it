@@ -13,9 +13,14 @@ import {
   reorderStories,
   updateStory,
 } from './services/stories.js';
-import { ensureRound, getCurrentRound } from './services/rounds.js';
-import { castVote, getVote, listVoterIds } from './services/votes.js';
-import { serializeOwnVote, serializeParticipant } from './services/serialize.js';
+import { ensureRound, getCurrentRound, revealRound } from './services/rounds.js';
+import { castVote, getVote, listVoterIds, listVotes } from './services/votes.js';
+import {
+  serializeOwnVote,
+  serializeParticipant,
+  serializeRevealedVote,
+} from './services/serialize.js';
+import { computeStats } from './services/stats.js';
 
 const room = (code) => `session:${code}`;
 
@@ -64,6 +69,39 @@ export function registerSocketHandlers(io, db, presence) {
       roundId: round?.id ?? null,
       voterIds: activeVoterIds(session),
     });
+  };
+
+  // The full reveal for a session's active round, or null if it hasn't been
+  // revealed. This is the ONLY path that returns other participants' values, and
+  // it is gated on `revealed_at` — see serializeRevealedVote and STORY-008.
+  const revealPayload = (session) => {
+    const round = session?.active_story_id
+      ? getCurrentRound(db, session.active_story_id)
+      : null;
+    if (!round?.revealed_at) return null;
+
+    const names = new Map(
+      listParticipants(db, session.id).map((p) => [p.id, p.display_name])
+    );
+    const votes = listVotes(db, round.id).map((v) =>
+      serializeRevealedVote(v, names.get(v.participant_id) ?? 'Unknown')
+    );
+    return {
+      storyId: session.active_story_id,
+      roundId: round.id,
+      revealedAt: round.revealed_at,
+      votes,
+      stats: computeStats(votes),
+    };
+  };
+
+  // Pushes the current reveal state to the room. Sends `null` when the active
+  // round isn't revealed (e.g. after switching to a fresh story) so clients
+  // clear any stale results.
+  const broadcastReveal = (sessionId) => {
+    const session = getSessionById(db, sessionId);
+    if (!session) return;
+    io.to(room(session.code)).emit('session:reveal', { reveal: revealPayload(session) });
   };
 
   // A participant's own vote for the active story's current round, or null.
@@ -142,6 +180,7 @@ export function registerSocketHandlers(io, db, presence) {
         stories: listStories(db, session.id),
         yourVote: ownActiveVote(session.id, participant.id),
         voterIds: activeVoterIds(session),
+        reveal: revealPayload(session),
       });
 
       broadcastParticipants(session);
@@ -204,7 +243,10 @@ export function registerSocketHandlers(io, db, presence) {
       ack?.({ ok: true });
       broadcastStories(socket.data.sessionId);
       // Deleting the active story clears the round everyone was voting on.
-      if (wasActive) broadcastVoting(socket.data.sessionId);
+      if (wasActive) {
+        broadcastVoting(socket.data.sessionId);
+        broadcastReveal(socket.data.sessionId);
+      }
     });
 
     socket.on('story:reorder', ({ orderedIds } = {}, ack) => {
@@ -228,8 +270,10 @@ export function registerSocketHandlers(io, db, presence) {
       if (storyId != null) ensureRound(db, storyId);
       ack?.({ ok: true });
       broadcastStories(socket.data.sessionId);
-      // The round changed, so the "who has voted" list resets for everyone.
+      // The round changed, so the "who has voted" list resets for everyone and
+      // any previous reveal no longer applies to the newly active story.
       broadcastVoting(socket.data.sessionId);
+      broadcastReveal(socket.data.sessionId);
     });
 
     // Any member casts or changes their own vote for the active story's round.
@@ -269,6 +313,24 @@ export function registerSocketHandlers(io, db, presence) {
     socket.on('vote:mine', (_payload, ack) => {
       if (!socket.data.participantId) return ack?.({ vote: null });
       ack?.({ vote: ownActiveVote(socket.data.sessionId, socket.data.participantId) });
+    });
+
+    // The facilitator closes the active round and reveals every vote at once.
+    // Revealing is idempotent (revealRound no-ops if already revealed) and, once
+    // set, vote:cast rejects further votes for that round.
+    socket.on('vote:reveal', (_payload, ack) => {
+      if (!requireFacilitator(ack)) return;
+
+      const session = getSessionById(db, socket.data.sessionId);
+      if (!session?.active_story_id) return ack?.({ error: 'No story is being estimated' });
+
+      const round = getCurrentRound(db, session.active_story_id);
+      if (!round) return ack?.({ error: 'Voting has not started' });
+
+      revealRound(db, round.id);
+      const reveal = revealPayload(getSessionById(db, session.id));
+      ack?.({ reveal });
+      io.to(room(session.code)).emit('session:reveal', { reveal });
     });
 
     socket.on('disconnect', () => {
