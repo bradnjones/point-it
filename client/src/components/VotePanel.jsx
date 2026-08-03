@@ -14,6 +14,7 @@ export default function VotePanel({
   isFacilitator = false,
   revealed = false,
   onReveal,
+  quick = false,
 }) {
   const [value, setValue] = useState(yourVote?.value ?? '');
   const [reason, setReason] = useState(yourVote?.reason ?? '');
@@ -59,7 +60,7 @@ export default function VotePanel({
     return (
       <section className="panel">
         <h2>Your vote</h2>
-        <p className="vote-story">{activeStory.title}</p>
+        {!quick && <p className="vote-story">{activeStory.title}</p>}
         <p className="hint">Votes are revealed — see the results below.</p>
       </section>
     );
@@ -68,7 +69,11 @@ export default function VotePanel({
   return (
     <section className="panel">
       <h2>Your vote</h2>
-      <p className="vote-story">{activeStory.title}</p>
+      {quick ? (
+        <p className="vote-story">Throw your points.</p>
+      ) : (
+        <p className="vote-story">{activeStory.title}</p>
+      )}
 
       <form onSubmit={submit}>
         <div className="scale" role="group" aria-label="Estimate">

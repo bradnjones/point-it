@@ -8,6 +8,7 @@ import { createSession, joinSession } from '../lib/api.js';
 export default function Join({ onJoined, onShowHistory }) {
   const [displayName, setDisplayName] = useState('');
   const [sessionName, setSessionName] = useState('');
+  const [kind, setKind] = useState('stories');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -20,6 +21,7 @@ export default function Join({ onJoined, onShowHistory }) {
       const { session, participant, facilitatorToken } = await createSession({
         name: sessionName,
         displayName,
+        kind,
       });
       onJoined({
         code: session.code,
@@ -101,9 +103,39 @@ export default function Join({ onJoined, onShowHistory }) {
             <input
               value={sessionName}
               onChange={(e) => setSessionName(e.target.value)}
-              placeholder="e.g. Sprint 42 refinement"
+              placeholder={
+                kind === 'quick' ? 'e.g. Sprint 42 quick points' : 'e.g. Sprint 42 refinement'
+              }
             />
           </label>
+
+          <div className="kind-choice" role="radiogroup" aria-label="Session type">
+            <label className={`kind-option${kind === 'stories' ? ' selected' : ''}`}>
+              <input
+                type="radio"
+                name="kind"
+                value="stories"
+                checked={kind === 'stories'}
+                onChange={() => setKind('stories')}
+              />
+              <span className="kind-title">Story backlog</span>
+              <span className="kind-desc">Add stories and estimate them one by one.</span>
+            </label>
+            <label className={`kind-option${kind === 'quick' ? ' selected' : ''}`}>
+              <input
+                type="radio"
+                name="kind"
+                value="quick"
+                checked={kind === 'quick'}
+                onChange={() => setKind('quick')}
+              />
+              <span className="kind-title">Quick estimate</span>
+              <span className="kind-desc">
+                Throw points, reveal, reset — no stories to manage.
+              </span>
+            </label>
+          </div>
+
           <button
             type="submit"
             onClick={handleCreate}

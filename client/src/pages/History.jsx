@@ -59,13 +59,16 @@ export default function History({ onBack, onOpen }) {
                 >
                   <div className="history-main">
                     <span className="history-name">{s.name}</span>
+                    {s.kind === 'quick' && <span className="badge">quick</span>}
                     <span className={`badge status ${s.status}`}>{s.status}</span>
                   </div>
                   <div className="history-meta">
                     <span>{formatDate(s.createdAt)}</span>
-                    <span>
-                      {s.storyCount} {s.storyCount === 1 ? 'story' : 'stories'}
-                    </span>
+                    {s.kind !== 'quick' && (
+                      <span>
+                        {s.storyCount} {s.storyCount === 1 ? 'story' : 'stories'}
+                      </span>
+                    )}
                     <span>
                       {s.participantCount}{' '}
                       {s.participantCount === 1 ? 'participant' : 'participants'}

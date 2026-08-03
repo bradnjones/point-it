@@ -70,4 +70,21 @@ describe('VotePanel', () => {
     expect(screen.getByText(/votes are revealed/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '5' })).not.toBeInTheDocument();
   });
+
+  it('shows a generic prompt instead of a story title in quick mode', () => {
+    render(
+      <VotePanel
+        activeStory={{ id: 1, title: 'Quick estimate' }}
+        scale={scale}
+        yourVote={null}
+        onCast={vi.fn().mockResolvedValue({})}
+        onReveal={vi.fn().mockResolvedValue({})}
+        quick
+      />
+    );
+    expect(screen.getByText(/throw your points/i)).toBeInTheDocument();
+    expect(screen.queryByText('Quick estimate')).not.toBeInTheDocument();
+    // Voting still works — the scale is present.
+    expect(screen.getByRole('button', { name: '5' })).toBeInTheDocument();
+  });
 });

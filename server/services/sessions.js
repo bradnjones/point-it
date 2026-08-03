@@ -16,13 +16,13 @@ function generateCode() {
  * Creates a session with a unique share code. Returns the row plus the plain
  * facilitator token, which is only ever returned here (the DB stores its hash).
  */
-export function createSession(db, { name, mode = 'free_form', scale }) {
+export function createSession(db, { name, mode = 'free_form', kind = 'stories', scale }) {
   const facilitatorToken = crypto.randomBytes(24).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(facilitatorToken).digest('hex');
 
   const insert = db.prepare(
-    `INSERT INTO sessions (code, name, mode, scale, facilitator_token)
-     VALUES (@code, @name, @mode, @scale, @tokenHash)`
+    `INSERT INTO sessions (code, name, mode, kind, scale, facilitator_token)
+     VALUES (@code, @name, @mode, @kind, @scale, @tokenHash)`
   );
 
   // Retry on the vanishingly rare code collision.
@@ -33,6 +33,7 @@ export function createSession(db, { name, mode = 'free_form', scale }) {
         code,
         name,
         mode,
+        kind,
         scale: scale ?? '1,2,3,5,8,13,21,?',
         tokenHash,
       });

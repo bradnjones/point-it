@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
 import { openDb } from '../db.js';
+import { getSessionByCode } from '../services/sessions.js';
+import { listStories } from '../services/stories.js';
+import { getCurrentRound } from '../services/rounds.js';
 
 let db;
 let app;
@@ -40,6 +43,29 @@ describe('POST /api/sessions', () => {
   it('rejects a missing session or display name', async () => {
     expect((await request(app).post('/api/sessions').send({ displayName: 'X' })).status).toBe(400);
     expect((await request(app).post('/api/sessions').send({ name: 'A' })).status).toBe(400);
+  });
+
+  it('defaults to a stories session', async () => {
+    const res = await request(app).post('/api/sessions').send({ name: 'A', displayName: 'X' });
+    expect(res.body.session.kind).toBe('stories');
+    expect(res.body.session.activeStoryId).toBeNull();
+  });
+
+  it('provisions a quick session with an active implicit story and open round', async () => {
+    const res = await request(app)
+      .post('/api/sessions')
+      .send({ name: 'Ad-hoc', displayName: 'Brad', kind: 'quick' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.session.kind).toBe('quick');
+    // The implicit story is active immediately so members can vote on join.
+    expect(res.body.session.activeStoryId).toEqual(expect.any(Number));
+
+    const session = getSessionByCode(db, res.body.session.code);
+    const stories = listStories(db, session.id);
+    expect(stories).toHaveLength(1);
+    expect(session.active_story_id).toBe(stories[0].id);
+    expect(getCurrentRound(db, stories[0].id)).not.toBeNull();
   });
 });
 

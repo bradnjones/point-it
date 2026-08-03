@@ -78,4 +78,17 @@ describe('RevealPanel', () => {
 
     expect(onRevote).toHaveBeenCalled();
   });
+
+  it('hides finalize and relabels reset as "New round" in quick mode', () => {
+    const onRevote = vi.fn().mockResolvedValue({});
+    render(
+      <RevealPanel reveal={reveal} isFacilitator onRevote={onRevote} onFinalize={vi.fn()} quick />
+    );
+
+    expect(screen.queryByRole('button', { name: /finalize/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/final points/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /new round/i }));
+    expect(onRevote).toHaveBeenCalled();
+  });
 });

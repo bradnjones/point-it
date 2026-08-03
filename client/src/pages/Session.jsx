@@ -20,6 +20,9 @@ export default function Session({ membership, onLeave }) {
   const [copied, setCopied] = useState(false);
 
   const isFacilitator = Boolean(membership.facilitatorToken);
+  // Quick (ad-hoc) sessions estimate repeated rounds against one implicit story,
+  // so they hide the backlog and story-specific controls entirely (STORY-019).
+  const quick = session?.kind === 'quick';
   // Tracks the active story we last loaded a vote for, so a plain story-list
   // change (add/edit/reorder) doesn't needlessly clear the vote in progress.
   const activeStoryRef = useRef(null);
@@ -215,6 +218,7 @@ export default function Session({ membership, onLeave }) {
         isFacilitator={isFacilitator}
         revealed={Boolean(reveal)}
         onReveal={revealVotes}
+        quick={quick}
       />
 
       <RevealPanel
@@ -222,14 +226,17 @@ export default function Session({ membership, onLeave }) {
         isFacilitator={isFacilitator}
         onRevote={reVote}
         onFinalize={finalize}
+        quick={quick}
       />
 
-      <StoriesPanel
-        stories={stories}
-        activeStoryId={activeStoryId}
-        isFacilitator={isFacilitator}
-        {...storyActions}
-      />
+      {!quick && (
+        <StoriesPanel
+          stories={stories}
+          activeStoryId={activeStoryId}
+          isFacilitator={isFacilitator}
+          {...storyActions}
+        />
+      )}
     </main>
   );
 }

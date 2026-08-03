@@ -8,7 +8,13 @@ import { useState } from 'react';
  * Post-reveal is also where the facilitator drives what happens next
  * (STORY-009): agree a final number, or re-vote for another round.
  */
-export default function RevealPanel({ reveal, isFacilitator = false, onRevote, onFinalize }) {
+export default function RevealPanel({
+  reveal,
+  isFacilitator = false,
+  onRevote,
+  onFinalize,
+  quick = false,
+}) {
   const [points, setPoints] = useState('');
   const [error, setError] = useState('');
 
@@ -70,19 +76,23 @@ export default function RevealPanel({ reveal, isFacilitator = false, onRevote, o
 
       {isFacilitator && (
         <div className="reveal-actions">
-          <form className="finalize-form" onSubmit={finalize}>
-            <input
-              aria-label="Final points"
-              value={points}
-              onChange={(e) => setPoints(e.target.value)}
-              placeholder="Final points"
-            />
-            <button type="submit" disabled={points.trim().length === 0}>
-              Finalize
-            </button>
-          </form>
+          {/* Quick sessions have no persistent story to record points against,
+              so they skip finalize; the reset ("New round") is the whole loop. */}
+          {!quick && (
+            <form className="finalize-form" onSubmit={finalize}>
+              <input
+                aria-label="Final points"
+                value={points}
+                onChange={(e) => setPoints(e.target.value)}
+                placeholder="Final points"
+              />
+              <button type="submit" disabled={points.trim().length === 0}>
+                Finalize
+              </button>
+            </form>
+          )}
           <button type="button" className="revote-btn" onClick={() => run(onRevote)}>
-            Re-vote
+            {quick ? 'New round' : 'Re-vote'}
           </button>
         </div>
       )}

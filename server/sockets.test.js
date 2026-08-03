@@ -5,10 +5,10 @@ import { io as ioClient } from 'socket.io-client';
 import { openDb } from './db.js';
 import { createPresence } from './services/presence.js';
 import { registerSocketHandlers } from './sockets.js';
-import { createSession, getSessionById } from './services/sessions.js';
+import { createSession, getSessionById, setActiveStory } from './services/sessions.js';
 import { addParticipant } from './services/participants.js';
-import { getStory, listStories } from './services/stories.js';
-import { getCurrentRound, isRevealed } from './services/rounds.js';
+import { addStory, getStory, listStories } from './services/stories.js';
+import { ensureRound, getCurrentRound, getRound, isRevealed, listRounds } from './services/rounds.js';
 import { countVotes, getVote } from './services/votes.js';
 
 let db;
@@ -565,6 +565,66 @@ describe('finalize & re-vote (STORY-009)', () => {
     const late = addParticipant(db, session.id, { displayName: 'Late' });
     const ack = await join(connect(), { code: session.code, participantId: late.id });
     expect(ack.roundId).toBe(getCurrentRound(db, story.id).id);
+  });
+});
+
+describe('quick sessions (STORY-019)', () => {
+  // Mirrors the REST provisioning: a quick session has one implicit, always-
+  // active story with an open round, so members vote the moment they join.
+  async function setup() {
+    const { session, facilitatorToken } = createSession(db, { name: 'Ad-hoc', kind: 'quick' });
+    const story = addStory(db, session.id, { title: 'Quick estimate' });
+    ensureRound(db, story.id);
+    setActiveStory(db, session.id, story.id);
+
+    const fac = addParticipant(db, session.id, { displayName: 'Fac', isFacilitator: true });
+    const alice = addParticipant(db, session.id, { displayName: 'Alice' });
+
+    const facClient = connect();
+    const facAck = await join(facClient, {
+      code: session.code,
+      participantId: fac.id,
+      facilitatorToken,
+    });
+    const aliceClient = connect();
+    await join(aliceClient, { code: session.code, participantId: alice.id });
+
+    return { session, story, fac, alice, facClient, aliceClient, facAck };
+  }
+
+  it('reports kind and an active round in the join ack so members can vote at once', async () => {
+    const { story, facAck } = await setup();
+    expect(facAck.session.kind).toBe('quick');
+    expect(facAck.session.activeStoryId).toBe(story.id);
+    expect(facAck.roundId).toBe(getCurrentRound(db, story.id).id);
+  });
+
+  it('lets a member throw points with no facilitator "start a story" step', async () => {
+    const { aliceClient } = await setup();
+    const ack = await emit(aliceClient, 'vote:cast', { value: '5' });
+    expect(ack.vote).toMatchObject({ value: '5' });
+  });
+
+  it('discards the previous round on reset instead of keeping history', async () => {
+    const { story, alice, aliceClient, facClient } = await setup();
+    await emit(aliceClient, 'vote:cast', { value: '3' });
+    const round1 = getCurrentRound(db, story.id);
+    await emit(facClient, 'vote:reveal');
+
+    const reset = waitForVoting(
+      facClient,
+      (p) => p.voterIds.length === 0 && p.roundId !== round1.id
+    );
+    await emit(facClient, 'vote:revote');
+    await reset;
+
+    // The old round (and its votes) is gone — only the fresh, empty round remains.
+    expect(getRound(db, round1.id)).toBeNull();
+    expect(listRounds(db, story.id)).toHaveLength(1);
+    const round2 = getCurrentRound(db, story.id);
+    expect(round2.id).not.toBe(round1.id);
+    expect(countVotes(db, round2.id)).toBe(0);
+    expect(getVote(db, round1.id, alice.id)).toBeNull();
   });
 });
 

@@ -40,6 +40,15 @@ export function listRounds(db, storyId) {
   return db.prepare('SELECT * FROM rounds WHERE story_id = ? ORDER BY round_number').all(storyId);
 }
 
+/**
+ * Deletes a round and its votes (ON DELETE CASCADE). Used by quick sessions
+ * (STORY-019), which discard the previous round on reset rather than keeping a
+ * per-round history the way backlog re-votes do.
+ */
+export function deleteRound(db, id) {
+  db.prepare('DELETE FROM rounds WHERE id = ?').run(id);
+}
+
 /** Marks a round revealed (STORY-008); votes are then visible and locked. */
 export function revealRound(db, id) {
   db.prepare(

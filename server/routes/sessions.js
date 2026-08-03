@@ -4,9 +4,11 @@ import {
   createSession,
   getSessionByCode,
   listSessions,
+  setActiveStory,
 } from '../services/sessions.js';
 import { addParticipant, listParticipants } from '../services/participants.js';
-import { listStories } from '../services/stories.js';
+import { addStory, listStories } from '../services/stories.js';
+import { ensureRound } from '../services/rounds.js';
 import {
   serializeParticipant,
   serializeSession,
@@ -40,6 +42,7 @@ export function createSessionRouter(db, presence) {
     const name = trimmed(req.body?.name);
     const displayName = trimmed(req.body?.displayName);
     const mode = req.body?.mode === 'pert' ? 'pert' : 'free_form';
+    const kind = req.body?.kind === 'quick' ? 'quick' : 'stories';
 
     if (!name) return res.status(400).json({ error: 'Session name is required' });
     if (!displayName) return res.status(400).json({ error: 'Your name is required' });
@@ -47,8 +50,20 @@ export function createSessionRouter(db, presence) {
       return res.status(400).json({ error: 'Name is too long' });
     }
 
-    const { session, facilitatorToken } = createSession(db, { name, mode });
+    let { session, facilitatorToken } = createSession(db, { name, mode, kind });
     const participant = addParticipant(db, session.id, { displayName, isFacilitator: true });
+
+    // A quick session has no managed backlog: it estimates repeated rounds
+    // against one implicit, always-active story so members can throw points the
+    // moment they join, with no "start a story" step. Provisioned atomically so
+    // the session is never observed active-but-round-less.
+    if (kind === 'quick') {
+      session = db.transaction(() => {
+        const story = addStory(db, session.id, { title: 'Quick estimate' });
+        ensureRound(db, story.id);
+        return setActiveStory(db, session.id, story.id);
+      })();
+    }
 
     res.status(201).json({
       session: serializeSession(session),

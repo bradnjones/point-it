@@ -15,7 +15,13 @@ import {
   setFinalPoints,
   updateStory,
 } from './services/stories.js';
-import { createRound, ensureRound, getCurrentRound, revealRound } from './services/rounds.js';
+import {
+  createRound,
+  deleteRound,
+  ensureRound,
+  getCurrentRound,
+  revealRound,
+} from './services/rounds.js';
 import { castVote, getVote, listVoterIds, listVotes } from './services/votes.js';
 import {
   serializeOwnVote,
@@ -175,6 +181,7 @@ export function registerSocketHandlers(io, db, presence) {
           code: session.code,
           name: session.name,
           mode: session.mode,
+          kind: session.kind,
           scale: session.scale,
           activeStoryId: session.active_story_id ?? null,
           closedAt: session.closed_at,
@@ -368,7 +375,13 @@ export function registerSocketHandlers(io, db, presence) {
       const session = getSessionById(db, socket.data.sessionId);
       if (!session?.active_story_id) return ack?.({ error: 'No story is being estimated' });
 
+      // Backlog sessions keep each round for history (STORY-009/011). Quick
+      // sessions (STORY-019) are ad-hoc: the reset discards the round just voted
+      // on so nothing accumulates. Either way a NEW round id is what makes every
+      // client clear its vote and reveal, so we always open a fresh round.
+      const previous = getCurrentRound(db, session.active_story_id);
       const round = createRound(db, session.active_story_id);
+      if (session.kind === 'quick' && previous) deleteRound(db, previous.id);
       ack?.({ roundId: round.id });
       broadcastVoting(socket.data.sessionId);
       broadcastReveal(socket.data.sessionId);
