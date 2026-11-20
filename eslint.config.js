@@ -3,7 +3,14 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'data/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      'data/**',
+      // Verbatim snapshot for the artifact rebuild; not part of this app.
+      'docs/artifact-rebuild/reference/**',
+    ],
   },
   js.configs.recommended,
   {
